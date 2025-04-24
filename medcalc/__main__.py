@@ -45,6 +45,31 @@ BP_COEFFICIENTS = {
 }
 
 @mcp.tool()
+def egfr_epi(scr: float, age: int, male: bool) -> dict:
+    """
+    Estimated Glomerular Filtration Rate (eGFR) using the EPI formula (version 2021)
+    Reference: N Engl J Med. 2021 Nov 4;385(19):1737-1749
+    
+    Parameters:
+    -----------
+    scr : float
+        serum creatinine level in mg/dL
+    age : int
+        Age in years
+    male : bool
+        true if Male
+    
+    Returns:
+    --------
+    eGFR : float
+        Estimated GFR in mL/min/1.73m^2
+    """
+    # 성별에 따른 κ와 α 값 설정
+    k = 0.9 if male else 0.7
+    a = -0.302 if male else -0.241
+    return 142 * (0.9938 ** age) * (min(scr / k, 1) ** a) * (max(scr / k, 1) ** -1.2) * (1 if male else 1.012)
+
+@mcp.tool()
 def bp_children(years: int, months: int, height: int, sex: str, systolic: int, diastolic: int) -> dict:
     """
     혈압 센타일(percentile)을 계산하는 함수
