@@ -45,7 +45,77 @@ BP_COEFFICIENTS = {
 }
 
 @mcp.tool()
-def egfr_epi(scr: float, age: int, male: bool) -> dict:
+def egfr_epi_cr_cys(scr: float, scys: float, age: int, male: bool) -> dict:
+    """
+    Estimated Glomerular Filtration Rate (eGFR) using the 2021 CKD-EPI Creatinine-Cystatin C equation
+    Reference: N Engl J Med. 2021 Nov 4;385(19):1737-1749
+    
+    Parameters:
+    -----------
+    scr : float
+        Serum creatinine level in mg/dL
+    scys : float
+        Serum cystatin C level in mg/L
+    age : int
+        Age in years
+    male : bool
+        True if patient is male, False if female
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing eGFR result and calculation parameters
+    """
+    # Set parameters based on sex, creatinine level, and cystatin C level
+    if male:
+        k_cr = 0.9  # Parameter A
+        k_cys = 0.8  # Parameter C
+        
+        if scr <= k_cr:
+            alpha = -0.144  # Parameter B
+        else:
+            alpha = -0.544  # Parameter B
+            
+        if scys <= k_cys:
+            beta = -0.323  # Parameter D
+        else:
+            beta = -0.778  # Parameter D
+            
+        sex_factor = 1.0
+    else:  # female
+        k_cr = 0.7  # Parameter A
+        k_cys = 0.8  # Parameter C
+        
+        if scr <= k_cr:
+            alpha = -0.219  # Parameter B
+        else:
+            alpha = -0.544  # Parameter B
+            
+        if scys <= k_cys:
+            beta = -0.323  # Parameter D
+        else:
+            beta = -0.778  # Parameter D
+            
+        sex_factor = 0.963
+    
+    # Calculate eGFR using the 2021 CKD-EPI Creatinine-Cystatin C equation
+    egfr = 135 * (scr / k_cr) ** alpha * (scys / k_cys) ** beta * (0.9961 ** age) * sex_factor
+    
+    # Return results
+    return {
+        "egfr": round(egfr, 1),
+        "equation": "2021 CKD-EPI Creatinine-Cystatin C",
+        "parameters": {
+            "k_cr": k_cr,
+            "k_cys": k_cys,
+            "alpha": alpha,
+            "beta": beta,
+            "sex_factor": sex_factor
+        }
+    }
+
+@mcp.tool()
+def egfr_epi(scr: float, age: int, male: bool) -> float:
     """
     Estimated Glomerular Filtration Rate (eGFR) using the EPI formula (version 2021)
     Reference: N Engl J Med. 2021 Nov 4;385(19):1737-1749
@@ -61,7 +131,7 @@ def egfr_epi(scr: float, age: int, male: bool) -> dict:
     
     Returns:
     --------
-    eGFR : float
+    float
         Estimated GFR in mL/min/1.73m^2
     """
     # 성별에 따른 κ와 α 값 설정
@@ -838,6 +908,408 @@ CDC_STATURE_DATA = {
     {'sex': 'female', 'age': 240,  'l': 1.108046193, 'm': 163.338251, 's': 0.039636316}
     ]
 }
+
+@mcp.tool()
+def crcl_cockcroft_gault(age: int, weight: float, height: float, scr: float, sex: str) -> dict:
+    """
+    Calculate Creatinine Clearance using the Cockcroft-Gault formula
+    
+    Parameters:
+    -----------
+    age : int
+        Age in years
+    weight : float
+        Actual body weight in kg
+    height : float
+        Height in inches
+    scr : float
+        Serum creatinine in mg/dL
+    sex : str
+        Gender ('male' or 'female')
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing creatinine clearance result and weight calculations
+    """
+    # Normalize sex input
+    if isinstance(sex, str):
+        sex = sex.lower()
+    
+    if sex not in ['male', 'female']:
+        raise ValueError("Sex must be 'male' or 'female'")
+    
+    # Calculate Ideal Body Weight (IBW) using Devine equation
+    if sex == 'male':
+        ibw = 50 + (2.3 * (height - 60))
+    else:
+        ibw = 45.5 + (2.3 * (height - 60))
+    
+    # Calculate Adjusted Body Weight (ABW)
+    abw = ibw + 0.4 * (weight - ibw)
+    
+    # Calculate BMI (convert height from inches to meters first)
+    height_m = height * 0.0254  # Convert inches to meters
+    bmi = weight / (height_m * height_m)
+    
+    # Determine which weight to use for CrCl calculation based on BMI category
+    if bmi < 18.5:  # Underweight
+        calc_weight = weight  # Use actual/total body weight
+        weight_used = "Actual (Underweight BMI)"
+        range_weight = weight
+    elif bmi < 25:  # Normal weight
+        calc_weight = ibw  # Use ideal body weight for calculation
+        weight_used = "IBW (Normal BMI)"
+        range_weight = weight  # Use actual body weight for range
+    else:  # Overweight/obese
+        calc_weight = abw  # Use adjusted body weight for calculation
+        weight_used = "ABW (Overweight/Obese BMI)"
+        range_weight = ibw  # Use ideal body weight for range
+    
+    # Calculate Creatinine Clearance using Cockcroft-Gault formula
+    crcl = (140 - age) * calc_weight
+    if sex == 'female':
+        crcl *= 0.85  # Apply correction factor for females
+    crcl /= (72 * scr)
+    
+    # Return results
+    return {
+        "creatinine_clearance": round(crcl, 1),
+        "ibw": round(ibw, 1),
+        "abw": round(abw, 1),
+        "weight_used": weight_used
+    }
+
+@mcp.tool()
+def map_calculator(sbp: int, dbp: int) -> dict:
+    """
+    Calculate Mean Arterial Pressure (MAP)
+    
+    Parameters:
+    -----------
+    sbp : int
+        Systolic Blood Pressure in mmHg
+    dbp : int
+        Diastolic Blood Pressure in mmHg
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing MAP result and input values
+    """
+    # Calculate Mean Arterial Pressure
+    map_value = (1/3) * sbp + (2/3) * dbp
+    
+    # Return results
+    return {
+        "map": round(map_value, 1),
+        "formula": "1/3 × SBP + 2/3 × DBP",
+        "inputs": {
+            "sbp": sbp,
+            "dbp": dbp
+        }
+    }
+
+@mcp.tool()
+def chads2_vasc_score(age: int, female: bool, chf: bool, hypertension: bool, 
+                      stroke_history: bool, vascular_disease: bool, diabetes: bool) -> dict:
+    """
+    Calculate CHA₂DS₂-VASc Score for Atrial Fibrillation Stroke Risk
+    
+    Parameters:
+    -----------
+    age : int
+        Age in years
+    female : bool
+        True if patient is female, False if male
+    chf : bool
+        True if patient has history of congestive heart failure
+    hypertension : bool
+        True if patient has history of hypertension
+    stroke_history : bool
+        True if patient has history of stroke, TIA, or thromboembolism
+    vascular_disease : bool
+        True if patient has history of vascular disease (prior MI, peripheral artery disease, or aortic plaque)
+    diabetes : bool
+        True if patient has history of diabetes mellitus
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing CHA₂DS₂-VASc score and risk factors
+    """
+    # Initialize score
+    score = 0
+    
+    # Calculate points for each risk factor
+    
+    # Age points
+    age_points = 0
+    if age >= 75:
+        age_points = 2
+    elif age >= 65:
+        age_points = 1
+    score += age_points
+    
+    # Sex points
+    sex_points = 1 if female else 0
+    score += sex_points
+    
+    # Congestive heart failure
+    chf_points = 1 if chf else 0
+    score += chf_points
+    
+    # Hypertension
+    htn_points = 1 if hypertension else 0
+    score += htn_points
+    
+    # Stroke/TIA/thromboembolism history
+    stroke_points = 2 if stroke_history else 0
+    score += stroke_points
+    
+    # Vascular disease
+    vascular_points = 1 if vascular_disease else 0
+    score += vascular_points
+    
+    # Diabetes
+    diabetes_points = 1 if diabetes else 0
+    score += diabetes_points
+    
+    # Determine stroke risk category based on score
+    risk_category = ""
+    annual_risk = ""
+    
+    if score == 0:
+        risk_category = "Low"
+        annual_risk = "0.2%"
+    elif score == 1:
+        risk_category = "Low-Moderate"
+        annual_risk = "0.6%"
+    elif score == 2:
+        risk_category = "Moderate"
+        annual_risk = "2.2%"
+    elif score == 3:
+        risk_category = "Moderate-High"
+        annual_risk = "3.2%"
+    elif score == 4:
+        risk_category = "High"
+        annual_risk = "4.8%"
+    elif score == 5:
+        risk_category = "High"
+        annual_risk = "7.2%"
+    elif score == 6:
+        risk_category = "High"
+        annual_risk = "9.7%"
+    elif score == 7:
+        risk_category = "High"
+        annual_risk = "11.2%"
+    elif score == 8:
+        risk_category = "High"
+        annual_risk = "10.8%"
+    else:  # score >= 9
+        risk_category = "High"
+        annual_risk = "12.2%"
+    
+    # Return results
+    return {
+        "score": score,
+        "risk_category": risk_category,
+        "annual_stroke_risk": annual_risk,
+        "risk_factors": {
+            "age": {
+                "value": age,
+                "points": age_points
+            },
+            "sex": {
+                "value": "Female" if female else "Male",
+                "points": sex_points
+            },
+            "congestive_heart_failure": {
+                "value": chf,
+                "points": chf_points
+            },
+            "hypertension": {
+                "value": hypertension,
+                "points": htn_points
+            },
+            "stroke_history": {
+                "value": stroke_history,
+                "points": stroke_points
+            },
+            "vascular_disease": {
+                "value": vascular_disease,
+                "points": vascular_points
+            },
+            "diabetes": {
+                "value": diabetes,
+                "points": diabetes_points
+            }
+        }
+    }
+
+@mcp.tool()
+def prevent_cvd_risk(age: int, female: bool, tc: float, hdl: float, sbp: int, 
+                     diabetes: bool, current_smoker: bool, egfr: float,
+                     using_antihtn: bool, using_statins: bool) -> dict:
+    """
+    Predicting Risk of Cardiovascular Disease EVENTs (PREVENT)
+    Predicts 10-year risk of CVD in patients aged 30-79 without known CVD.
+    
+    Parameters:
+    -----------
+    age : int
+        Age in years (30-79)
+    female : bool
+        True if patient is female, False if male
+    tc : float
+        Total cholesterol in mmol/L
+    hdl : float
+        HDL cholesterol in mmol/L
+    sbp : int
+        Systolic blood pressure in mmHg
+    diabetes : bool
+        True if patient has diabetes
+    current_smoker : bool
+        True if patient is a current smoker
+    egfr : float
+        Estimated glomerular filtration rate in mL/min/1.73m²
+    using_antihtn : bool
+        True if patient is using antihypertensive drugs
+    using_statins : bool
+        True if patient is using statins
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing 10-year CVD risk and calculation details
+    """
+    # Input validation
+    if age < 30 or age > 79:
+        raise ValueError("Age must be between 30 and 79 years")
+    
+    # Variable transformations
+    cage = (age - 55) / 10
+    cnhdl = tc - hdl - 3.5
+    chdl = (hdl - 1.3) / 0.3
+    csbp = (min(sbp, 110) - 110) / 20
+    csbp2 = (max(sbp, 110) - 130) / 20
+    cegfr = (min(egfr, 60) - 60) / -15
+    cegfr2 = (max(egfr, 60) - 90) / -15
+    
+    # Convert boolean inputs to 0/1
+    diabetes_val = 1 if diabetes else 0
+    smoker_val = 1 if current_smoker else 0
+    antihtn_val = 1 if using_antihtn else 0
+    statin_val = 1 if using_statins else 0
+    
+    # Calculate interaction terms
+    sbp_antihtn = csbp2 * antihtn_val
+    chol_statin = cnhdl * statin_val
+    age_chol1 = cage * cnhdl
+    age_chol2 = cage * chdl
+    age_sbp = cage * csbp2
+    age_diabetes = cage * diabetes_val
+    age_smoking = cage * smoker_val
+    age_egfr = cage * cegfr
+    
+    # Select coefficients based on sex
+    if female:
+        # Female coefficients
+        coef_age = 0.7939
+        coef_cnhdl = 0.0305
+        coef_chdl = -0.1607
+        coef_csbp = -0.2394
+        coef_csbp2 = 0.36
+        coef_diabetes = 0.8668
+        coef_smoker = 0.5361
+        coef_cegfr = 0.6046
+        coef_cegfr2 = 0.0434
+        coef_antihtn = 0.3152
+        coef_statin = -0.1478
+        coef_sbp_antihtn = -0.0664
+        coef_chol_statin = 0.1198
+        coef_age_chol1 = -0.082
+        coef_age_chol2 = 0.0307
+        coef_age_sbp = -0.0946
+        coef_age_diabetes = -0.2706
+        coef_age_smoking = -0.0787
+        coef_age_egfr = -0.1638
+        constant = -3.3077
+    else:
+        # Male coefficients
+        coef_age = 0.7689
+        coef_cnhdl = 0.0736
+        coef_chdl = -0.0954
+        coef_csbp = -0.4347
+        coef_csbp2 = 0.3363
+        coef_diabetes = 0.7693
+        coef_smoker = 0.4387
+        coef_cegfr = 0.5379
+        coef_cegfr2 = 0.0165
+        coef_antihtn = 0.2889
+        coef_statin = -0.1337
+        coef_sbp_antihtn = -0.0476
+        coef_chol_statin = 0.1503
+        coef_age_chol1 = -0.0518
+        coef_age_chol2 = 0.0191
+        coef_age_sbp = -0.1049
+        coef_age_diabetes = -0.2252
+        coef_age_smoking = -0.0895
+        coef_age_egfr = -0.1543
+        constant = -3.0312
+    
+    # Calculate the sum of beta * transformed variables
+    x = constant
+    x += coef_age * cage
+    x += coef_cnhdl * cnhdl
+    x += coef_chdl * chdl
+    x += coef_csbp * csbp
+    x += coef_csbp2 * csbp2
+    x += coef_diabetes * diabetes_val
+    x += coef_smoker * smoker_val
+    x += coef_cegfr * cegfr
+    x += coef_cegfr2 * cegfr2
+    x += coef_antihtn * antihtn_val
+    x += coef_statin * statin_val
+    x += coef_sbp_antihtn * sbp_antihtn
+    x += coef_chol_statin * chol_statin
+    x += coef_age_chol1 * age_chol1
+    x += coef_age_chol2 * age_chol2
+    x += coef_age_sbp * age_sbp
+    x += coef_age_diabetes * age_diabetes
+    x += coef_age_smoking * age_smoking
+    x += coef_age_egfr * age_egfr
+    
+    # Calculate 10-year risk
+    import math
+    risk_10yr = math.exp(x) / (1 + math.exp(x)) * 100
+    
+    # Return results
+    return {
+        "risk_10yr": round(risk_10yr, 1),
+        "risk_category": get_cvd_risk_category(risk_10yr),
+        "transformed_variables": {
+            "cage": round(cage, 4),
+            "cnhdl": round(cnhdl, 4),
+            "chdl": round(chdl, 4),
+            "csbp": round(csbp, 4),
+            "csbp2": round(csbp2, 4),
+            "cegfr": round(cegfr, 4),
+            "cegfr2": round(cegfr2, 4)
+        },
+        "model_score": round(x, 4)
+    }
+
+def get_cvd_risk_category(risk):
+    """Helper function to categorize CVD risk"""
+    if risk < 5:
+        return "Low"
+    elif risk < 7.5:
+        return "Borderline"
+    elif risk < 20:
+        return "Intermediate"
+    else:
+        return "High"
 
 def main():
     mcp.run()
