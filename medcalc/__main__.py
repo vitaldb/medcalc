@@ -1341,7 +1341,6 @@ def prevent_cvd_risk(age: int, female: bool, tc: float, hdl: float, sbp: int,
     x += coef_age_egfr * age_egfr
     
     # Calculate 10-year risk
-    import math
     risk_10yr = math.exp(x) / (1 + math.exp(x)) * 100
     
     # Return results
@@ -2222,61 +2221,83 @@ def corrected_sodium(
         "hillier": round(hillier_corrected, 2)
     }
 
-import math
-
 @mcp.tool()
-def meld_na(
-    creatinine: float,
+def meld_3(
+    age: int,
+    female: bool,
     bilirubin: float,
     inr: float,
+    creatinine: float,
+    albumin: float,
     sodium: float,
-    dialysis_recent: bool = False
-) -> float:
+    dialysis: bool
+) -> int:
     """
-    Calculates MELD-Na score for liver transplant prioritization (OPTN/UNOS 2016).
+    Calculates MELD 3.0 Score for liver disease transplant planning.
 
     Parameters:
     -----------
-    creatinine : float
-        Serum creatinine in mg/dL.
+    age : int
+        Patient age in years.
+    female : bool
+        True if patient is female.
     bilirubin : float
-        Total bilirubin in mg/dL.
+        Serum bilirubin in mg/dL.
     inr : float
         INR (International Normalized Ratio).
+    creatinine : float
+        Serum creatinine in mg/dL.
+    albumin : float
+        Serum albumin in g/dL.
     sodium : float
         Serum sodium in mEq/L.
-    dialysis_recent : bool
-        True if patient had ≥2 dialysis sessions or 24h CVVHD in the past 7 days.
+    dialysis : bool
+        True if patient had ≥2 dialysis sessions or 24h CVVHD in last 7 days.
 
     Returns:
     --------
-    float
-        MELD-Na score (max 40).
+    int
+        MELD 3.0 score, rounded to the nearest whole number.
     """
-    # Apply minimum values
-    cr = max(creatinine, 1.0)
-    bili = max(bilirubin, 1.0)
-    inr_val = max(inr, 1.0)
+    # Apply rules for minimum/maximum values
+    bilirubin = max(bilirubin, 1.0)
+    inr = max(inr, 1.0)
+    sodium = min(max(sodium, 125), 137)
+    albumin = min(max(albumin, 1.5), 3.5)
 
-    # Apply dialysis condition
-    if cr > 4.0 or dialysis_recent:
-        cr = 4.0
-
-    # Apply sodium caps
-    na = min(max(sodium, 125), 137)
-
-    # Initial MELD(i)
-    meld_i = 0.957 * math.log(cr) + 0.378 * math.log(bili) + 1.120 * math.log(inr_val) + 0.643
-    meld_i = round(meld_i, 1) * 10  # Rounded to 1 decimal, then multiplied by 10
-
-    # Apply Na adjustment if MELD(i) > 11
-    if meld_i > 11:
-        meld = meld_i + 1.32 * (137 - na) - (0.033 * meld_i * (137 - na))
+    if dialysis or creatinine > 3.0:
+        creatinine = 3.0
     else:
-        meld = meld_i
+        creatinine = max(creatinine, 1.0)
 
-    # Cap MELD at 40
-    return min(round(meld), 40)
+    # MELD 3.0 for age >= 18
+    if age >= 18:
+        female_coef = 1.33 if female else 0
+        meld = (
+            female_coef +
+            4.56 * math.log(bilirubin) +
+            0.82 * (137 - sodium) -
+            0.24 * (137 - sodium) * math.log(bilirubin) +
+            9.09 * math.log(inr) +
+            11.14 * math.log(creatinine) +
+            1.85 * (3.5 - albumin) -
+            1.83 * (3.5 - albumin) * math.log(creatinine) +
+            6
+        )
+    else:  # 12 ≤ age < 18
+        meld = (
+            4.56 * math.log(bilirubin) +
+            0.82 * (137 - sodium) -
+            0.24 * (137 - sodium) * math.log(bilirubin) +
+            9.09 * math.log(inr) +
+            11.14 * math.log(creatinine) +
+            1.85 * (3.5 - albumin) -
+            1.83 * (3.5 - albumin) -
+            1.83 * (3.5 - albumin) * math.log(creatinine) +
+            7.33
+        )
+
+    return round(meld)
 
 @mcp.tool()
 def framingham_risk_score(
@@ -2341,6 +2362,9 @@ def framingham_risk_score(
             "intercept": -146.5933061
         }
     }
+    treated_for_bp = int(treated_for_bp)
+    smoker = int(smoker)
+
     
     # Validate gender input
     if gender.lower() not in coefficients:
@@ -2377,9 +2401,9 @@ def framingham_risk_score(
 
     # Calculate probability of a heart attack using the equation
     if gender == "male":
-        P = 1 - 0.9402 * math.exp(L)
+        P = 1 - math.pow(0.9402,math.exp(L))
     else:
-        P = 1 - 0.98767 * math.exp(L)
+        P = 1 - math.pow(0.98767,math.exp(L))
 
     # Return the risk as a percentage
     risk_percentage = P * 100
