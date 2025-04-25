@@ -910,6 +910,66 @@ CDC_STATURE_DATA = {
 }
 
 @mcp.tool()
+def bmi_bsa_calculator(weight: float, height: float, height_unit: str = "cm") -> dict:
+    """
+    Calculates Body Mass Index (BMI) and Body Surface Area (BSA)
+    
+    Parameters:
+    -----------
+    weight : float
+        Weight in kilograms
+    height : float
+        Height in centimeters (default) or meters
+    height_unit : str
+        Unit of height measurement ('cm' or 'm', default is 'cm')
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing BMI, BSA, and classification
+    """
+    # Normalize height to meters for calculations
+    if height_unit.lower() == "cm":
+        height_m = height / 100
+    elif height_unit.lower() == "m":
+        height_m = height
+    else:
+        raise ValueError("Height unit must be 'cm' or 'm'")
+    
+    # Calculate BMI: weight(kg) / height(m)²
+    bmi = weight / (height_m * height_m)
+    
+    # Calculate BSA using Mosteller formula: √(height(cm) × weight(kg) / 3600)
+    height_cm = height_m * 100
+    bsa = math.sqrt((height_cm * weight) / 3600)
+    
+    # Determine BMI classification
+    bmi_classification = ""
+    if bmi < 18.5:
+        bmi_classification = "Underweight"
+    elif bmi < 25:
+        bmi_classification = "Normal weight"
+    elif bmi < 30:
+        bmi_classification = "Overweight"
+    elif bmi < 35:
+        bmi_classification = "Obesity class I"
+    elif bmi < 40:
+        bmi_classification = "Obesity class II"
+    else:
+        bmi_classification = "Obesity class III"
+    
+    # Return results
+    return {
+        "bmi": round(bmi, 1),
+        "bsa": round(bsa, 2),
+        "bmi_classification": bmi_classification,
+        "formulas": {
+            "bmi": "weight(kg) / height(m)²",
+            "bsa": "√(height(cm) × weight(kg) / 3600) [Mosteller formula]"
+        }
+    }
+
+@mcp.tool()
 def crcl_cockcroft_gault(age: int, weight: float, height: float, scr: float, sex: str) -> dict:
     """
     Calculate Creatinine Clearance using the Cockcroft-Gault formula
@@ -1310,6 +1370,1047 @@ def get_cvd_risk_category(risk):
         return "Intermediate"
     else:
         return "High"
+
+@mcp.tool()
+def bmi_bsa_calculator(weight_kg: float, height_cm: float) -> dict:
+    """
+    Body Mass Index (BMI) and Body Surface Area (BSA) Calculator
+    Calculates BMI and BSA using weight and height measurements.
+    
+    Parameters:
+    -----------
+    weight_kg : float
+        Weight in kilograms
+    height_cm : float
+        Height in centimeters
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing BMI, BMI category, BSA, and calculation details
+        
+    Formulas:
+    ---------
+    BMI = weight(kg) / (height(m))²
+    BSA (Mosteller) = √[height(cm) × weight(kg) / 3600]
+    
+    References:
+    -----------
+    BMI categories: World Health Organization
+    BSA: Mosteller RD. N Engl J Med. 1987;317(17):1098
+    """
+    # Input validation
+    if weight_kg <= 0:
+        raise ValueError("Weight must be a positive number")
+    if height_cm <= 0:
+        raise ValueError("Height must be a positive number")
+    
+    # Convert height from cm to m for BMI calculation
+    height_m = height_cm / 100
+    
+    # Calculate BMI
+    bmi = weight_kg / (height_m * height_m)
+    
+    # Determine BMI category
+    if bmi < 18.5:
+        bmi_category = "Underweight"
+    elif 18.5 <= bmi < 25:
+        bmi_category = "Normal weight"
+    elif 25 <= bmi < 30:
+        bmi_category = "Overweight"
+    elif 30 <= bmi < 35:
+        bmi_category = "Obesity class I"
+    elif 35 <= bmi < 40:
+        bmi_category = "Obesity class II"
+    else:
+        bmi_category = "Obesity class III"
+    
+    # Calculate BSA using Mosteller formula
+    bsa = ((height_cm * weight_kg) / 3600) ** 0.5
+    
+    # Return results
+    return {
+        "bmi": round(bmi, 2),
+        "bmi_category": bmi_category,
+        "bsa": round(bsa, 2),
+        "calculations": {
+            "bmi_formula": "weight(kg) / (height(m))²",
+            "bmi_calculation": f"{weight_kg} / ({height_m})² = {round(bmi, 2)}",
+            "bsa_formula": "√[height(cm) × weight(kg) / 3600]",
+            "bsa_calculation": f"√[{height_cm} × {weight_kg} / 3600] = {round(bsa, 2)}"
+        }
+    }
+
+@mcp.tool()
+def corrected_calcium(serum_calcium: float, patient_albumin: float, normal_albumin: float = 4.0) -> dict:
+    """
+    Calcium Correction for Hypoalbuminemia and Hyperalbuminemia
+    Calculates a corrected calcium level for patients with abnormal albumin levels.
+    
+    Parameters:
+    -----------
+    serum_calcium : float
+        Patient's measured serum calcium level in mg/dL
+    patient_albumin : float
+        Patient's serum albumin level in g/dL
+    normal_albumin : float, optional
+        Normal/reference albumin level in g/dL, default is 4.0 g/dL
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing corrected calcium value, interpretation, and calculation details
+        
+    Formula:
+    --------
+    Corrected Calcium = (0.8 * (Normal Albumin - Patient's Albumin)) + Serum Calcium
+    
+    References:
+    -----------
+    Payne RB, et al. Br Med J. 1973;4(5893):643-646.
+    """
+    # Input validation
+    if serum_calcium <= 0:
+        raise ValueError("Serum calcium must be a positive number")
+    if patient_albumin < 0:
+        raise ValueError("Patient albumin cannot be negative")
+    if normal_albumin <= 0:
+        raise ValueError("Normal albumin must be a positive number")
+    
+    # Calculate corrected calcium
+    corrected_ca = (0.8 * (normal_albumin - patient_albumin)) + serum_calcium
+    
+    # Determine calcium status
+    if corrected_ca < 8.5:
+        interpretation = "Hypocalcemia"
+    elif corrected_ca > 10.5:
+        interpretation = "Hypercalcemia"
+    else:
+        interpretation = "Normocalcemia"
+    
+    # Determine albumin status
+    if patient_albumin < normal_albumin - 0.5:
+        albumin_status = "Hypoalbuminemia"
+    elif patient_albumin > normal_albumin + 0.5:
+        albumin_status = "Hyperalbuminemia"
+    else:
+        albumin_status = "Normal albumin"
+    
+    # Return results
+    return {
+        "measured_calcium": round(serum_calcium, 2),
+        "corrected_calcium": round(corrected_ca, 2),
+        "calcium_interpretation": interpretation,
+        "albumin_status": albumin_status,
+        "calculations": {
+            "formula": "Corrected Ca = (0.8 * (Normal Albumin - Patient's Albumin)) + Serum Ca",
+            "calculation": f"(0.8 * ({normal_albumin} - {patient_albumin})) + {serum_calcium} = {round(corrected_ca, 2)}",
+            "note": "Reference ranges: Normal calcium 8.5-10.5 mg/dL, Normal albumin ~4.0 g/dL"
+        }
+    }
+
+@mcp.tool()
+def qtc_calculator(qt_interval: float, heart_rate: float, formula: str = "bazett") -> dict:
+    """
+    Corrected QT Interval (QTc) Calculator
+    Corrects the QT interval for heart rate extremes using various formulas.
+    
+    Parameters:
+    -----------
+    qt_interval : float
+        Measured QT interval in milliseconds (ms)
+    heart_rate : float
+        Heart rate in beats per minute (bpm)
+    formula : str, optional
+        Formula to use for correction (default: "bazett")
+        Options: "bazett", "fridericia", "framingham", "hodges", "rautaharju"
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing QTc value, interpretation, and calculation details
+        
+    Formulas:
+    ---------
+    RR interval = 60 / heart_rate (in seconds)
+    Bazett: QTc = QT / √(RR)
+    Fridericia: QTc = QT / (RR)^(1/3)
+    Framingham: QTc = QT + 154 × (1 - RR)
+    Hodges: QTc = QT + 1.75 × (heart_rate - 60)
+    Rautaharju: QTc = QT × (120 + heart_rate) / 180
+    
+    References:
+    -----------
+    Bazett HC. Heart. 1920;7:353-370
+    Fridericia LS. Acta Med Scand. 1920;53:469-486
+    Sagie A, et al. Am J Cardiol. 1992;70(7):797-801 (Framingham)
+    Hodges M, et al. J Electrocardiol. 1983;16(1):17-24
+    Rautaharju PM, et al. J Am Coll Cardiol. 2004;44(3):594-600
+    """
+    # Calculate RR interval in seconds
+    rr_interval = 60 / heart_rate
+    
+    # Initialize variables
+    qtc = 0
+    calculation_steps = ""
+    
+    # Calculate QTc based on selected formula
+    formula = formula.lower()
+    
+    if formula == "bazett":
+        qtc = qt_interval / (rr_interval ** 0.5)
+        calculation_steps = f"QT / √(RR) = {qt_interval} / √({rr_interval:.3f}) = {qtc:.1f} ms"
+    
+    elif formula == "fridericia":
+        qtc = qt_interval / (rr_interval ** (1/3))
+        calculation_steps = f"QT / (RR)^(1/3) = {qt_interval} / ({rr_interval:.3f})^(1/3) = {qtc:.1f} ms"
+    
+    elif formula == "framingham":
+        qtc = qt_interval + 154 * (1 - rr_interval)
+        calculation_steps = f"QT + 154 × (1 - RR) = {qt_interval} + 154 × (1 - {rr_interval:.3f}) = {qtc:.1f} ms"
+    
+    elif formula == "hodges":
+        qtc = qt_interval + 1.75 * (heart_rate - 60)
+        calculation_steps = f"QT + 1.75 × (HR - 60) = {qt_interval} + 1.75 × ({heart_rate} - 60) = {qtc:.1f} ms"
+    
+    elif formula == "rautaharju":
+        qtc = qt_interval * (120 + heart_rate) / 180
+        calculation_steps = f"QT × (120 + HR) / 180 = {qt_interval} × (120 + {heart_rate}) / 180 = {qtc:.1f} ms"
+    
+    else:
+        # Default to Bazett if formula not recognized
+        qtc = qt_interval / (rr_interval ** 0.5)
+        calculation_steps = f"QT / √(RR) = {qt_interval} / √({rr_interval:.3f}) = {qtc:.1f} ms (Bazett - default)"
+    
+    # Interpret QTc result
+    if qtc < 350:
+        interpretation = "Short QT interval"
+        risk = "May indicate genetic channelopathies associated with risk of arrhythmias"
+    elif qtc <= 450:
+        interpretation = "Normal QTc interval"
+        risk = "No increased risk"
+    elif qtc <= 470 and formula == "bazett":
+        interpretation = "Borderline QTc interval"
+        risk = "Mild increased risk of arrhythmias"
+    elif qtc <= 500:
+        interpretation = "Prolonged QTc interval"
+        risk = "Moderate increased risk of Torsades de Pointes and sudden cardiac death"
+    else:
+        interpretation = "Severely prolonged QTc interval"
+        risk = "High risk of Torsades de Pointes and sudden cardiac death"
+    
+    # Return results
+    return {
+        "qt_interval": qt_interval,
+        "heart_rate": heart_rate,
+        "rr_interval": round(rr_interval, 3),
+        "formula_used": formula.capitalize(),
+        "qtc": round(qtc, 1),
+        "interpretation": interpretation,
+        "risk_assessment": risk,
+        "calculation": calculation_steps,
+        "note": "Normal QTc values: ≤450 ms (male), ≤460 ms (female). Values >500 ms indicate high risk."
+    }
+
+@mcp.tool()
+def wells_pe_criteria(
+    clinical_signs_dvt: bool = False,
+    alternative_diagnosis_less_likely: bool = False, 
+    heart_rate_over_100: bool = False,
+    immobilization_or_surgery: bool = False,
+    previous_dvt_or_pe: bool = False,
+    hemoptysis: bool = False,
+    malignancy: bool = False
+) -> dict:
+    """
+    Wells' Criteria for Pulmonary Embolism
+    Objectifies risk of pulmonary embolism based on clinical criteria.
+    Reference: Wells PS, et al. Thromb Haemost. 2000;83(3):416-20.
+    
+    Parameters:
+    -----------
+    clinical_signs_dvt: bool
+        Clinical signs and symptoms of DVT (leg swelling, pain with palpation)
+    alternative_diagnosis_less_likely: bool
+        Alternative diagnosis less likely than PE
+    heart_rate_over_100: bool
+        Heart rate > 100 beats per minute
+    immobilization_or_surgery: bool
+        Immobilization or surgery in the previous four weeks
+    previous_dvt_or_pe: bool
+        Previous DVT/PE
+    hemoptysis: bool
+        Hemoptysis
+    malignancy: bool
+        Malignancy (treatment ongoing, treated in last 6 months, or palliative)
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing the score, risk category for both three-tier and 
+        two-tier models, and recommendations
+    """
+    # Calculate points based on criteria
+    points = 0
+    
+    if clinical_signs_dvt:
+        points += 3.0
+    if alternative_diagnosis_less_likely:
+        points += 3.0
+    if heart_rate_over_100:
+        points += 1.5
+    if immobilization_or_surgery:
+        points += 1.5
+    if previous_dvt_or_pe:
+        points += 1.5
+    if hemoptysis:
+        points += 1.0
+    if malignancy:
+        points += 1.0
+    
+    # Determine risk category (Three-tier model)
+    if points <= 1:
+        three_tier_risk = "Low Risk"
+    elif points <= 6:
+        three_tier_risk = "Moderate Risk"
+    else:
+        three_tier_risk = "High Risk"
+    
+    # Determine risk category (Two-tier model)
+    if points <= 4:
+        two_tier_risk = "PE Unlikely (consider D-dimer testing)"
+    else:
+        two_tier_risk = "PE Likely (proceed to CTA)"
+    
+    # Return comprehensive results
+    return {
+        "score": points,
+        "three_tier_model": three_tier_risk,
+        "two_tier_model": two_tier_risk,
+        "score_interpretation": f"Score: {points}, {three_tier_risk} (three-tier), {two_tier_risk} (two-tier)"
+    }
+
+@mcp.tool()
+def ibw_abw_calculator(weight_kg: float, height_inches: float, male: bool) -> dict:
+    """
+    Ideal Body Weight and Adjusted Body Weight Calculator
+    Calculates ideal body weight (Devine formula) and adjusted body weight.
+    
+    Parameters:
+    -----------
+    weight_kg : float
+        Actual body weight in kilograms
+    height_inches : float
+        Height in inches
+    male : bool
+        True if patient is male, False if female
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing ideal body weight, adjusted body weight, and calculation details
+        
+    Formulas:
+    ---------
+    Ideal Body Weight (IBW) (Devine formula):
+    - Men: IBW = 50 kg + 2.3 kg × (height in inches - 60)
+    - Women: IBW = 45.5 kg + 2.3 kg × (height in inches - 60)
+    
+    Adjusted Body Weight (ABW):
+    - ABW = IBW + 0.4 × (actual weight - IBW)
+    
+    References:
+    -----------
+    Devine BJ. Gentamicin therapy. Drug Intell Clin Pharm. 1974;8:650-655.
+    Pai MP. Drug Dosing Based on Weight and Body Surface Area: Mathematical Assumptions and Limitations in Obese Adults. Pharmacotherapy. 2012;32(9):856-868.
+    """
+    # Calculate ideal body weight (IBW)
+    ibw = 0
+    ibw_notes = []
+    
+    if height_inches >= 60:
+        # Standard Devine formula
+        if male:
+            ibw = 50 + 2.3 * (height_inches - 60)
+        else:
+            ibw = 45.5 + 2.3 * (height_inches - 60)
+    else:
+        # Modification for height under 60 inches
+        # Using 2.3 kg (5 lbs) reduction per inch below 60 inches
+        if male:
+            ibw = 50 - 2.3 * (60 - height_inches)
+            ibw_notes.append("Modified formula used for height < 60 inches")
+        else:
+            ibw = 45.5 - 2.3 * (60 - height_inches)
+            ibw_notes.append("Modified formula used for height < 60 inches")
+    
+    # Ensure IBW is not negative
+    if ibw <= 0:
+        ibw = weight_kg * 0.5  # Fallback for extremely short heights
+        ibw_notes.append("Standard formula not applicable. Approximation used.")
+    
+    # Calculate adjusted body weight (ABW) if patient is obese
+    abw = ibw
+    obesity_status = "Non-obese"
+    
+    if weight_kg > ibw * 1.2:  # Common threshold for obesity (>120% of IBW)
+        abw = ibw + 0.4 * (weight_kg - ibw)
+        obesity_status = "Obese (>120% of IBW)"
+    
+    # Calculate percentage of IBW
+    percent_ibw = (weight_kg / ibw) * 100
+    
+    # Return results
+    return {
+        "actual_weight_kg": round(weight_kg, 1),
+        "ideal_body_weight_kg": round(ibw, 1),
+        "adjusted_body_weight_kg": round(abw, 1),
+        "percent_ibw": round(percent_ibw, 1),
+        "obesity_status": obesity_status,
+    }
+
+@mcp.tool()
+def pregnancy_calculator(
+    calculation_method: str,
+    date_value: str,
+    cycle_length: int = 28,
+    gestational_age_weeks: int = None,
+    gestational_age_days: int = None
+) -> dict:
+    """
+    Pregnancy Due Dates Calculator
+    Calculates pregnancy dates from last period, gestational age, or date of conception.
+    
+    Parameters:
+    -----------
+    calculation_method : str
+        Method used for calculation: "lmp" (last menstrual period), "conception", or "ultrasound"
+    date_value : str
+        Date in format 'YYYY-MM-DD' (date of LMP, conception, or ultrasound)
+    cycle_length : int, optional
+        Length of menstrual cycle in days (default: 28)
+    gestational_age_weeks : int, optional
+        Weeks of gestational age at ultrasound (required if calculation_method is "ultrasound")
+    gestational_age_days : int, optional
+        Days of gestational age at ultrasound (required if calculation_method is "ultrasound")
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing calculated pregnancy dates and information
+        
+    Formulas:
+    ---------
+    - EGA (Estimated Gestational Age) = time since 1st day of LMP
+    - EDC (Estimated Date of Conception) = LMP + 2 weeks (adjusted for cycle length)
+    - EDD (Estimated Due Date) = LMP + 40 weeks (adjusted for cycle length)
+    
+    For non-28 day cycles:
+    - Adjustment = (cycle_length - 28) days
+    - EDD = LMP + 40 weeks + Adjustment
+    """
+    from datetime import datetime, timedelta
+    
+    # Parse input date
+    input_date = datetime.strptime(date_value, '%Y-%m-%d')
+    today = datetime.now()
+    
+    # Initialize variables
+    lmp_date = None
+    conception_date = None
+    due_date = None
+    
+    # Calculate dates based on method
+    if calculation_method.lower() == "lmp":
+        # Last menstrual period provided
+        lmp_date = input_date
+        
+        # Calculate conception date (LMP + ~2 weeks, adjusted for cycle length)
+        cycle_adjustment = (cycle_length - 28) if cycle_length > 28 else 0
+        conception_offset = 14 + cycle_adjustment
+        conception_date = lmp_date + timedelta(days=conception_offset)
+        
+        # Calculate due date (LMP + 40 weeks, adjusted for cycle length)
+        due_date = lmp_date + timedelta(days=280 + cycle_adjustment)
+        
+    elif calculation_method.lower() == "conception":
+        # Conception date provided
+        conception_date = input_date
+        
+        # Calculate LMP date (conception - ~2 weeks)
+        cycle_adjustment = (cycle_length - 28) if cycle_length > 28 else 0
+        lmp_date = conception_date - timedelta(days=14 + cycle_adjustment)
+        
+        # Calculate due date (conception + 38 weeks)
+        due_date = conception_date + timedelta(days=266)
+        
+    elif calculation_method.lower() == "ultrasound":
+        # Ultrasound date provided with gestational age
+        if gestational_age_weeks is None or gestational_age_days is None:
+            return {"error": "Gestational age weeks and days are required for ultrasound method"}
+        
+        # Calculate LMP date from gestational age at ultrasound
+        ga_days_total = (gestational_age_weeks * 7) + gestational_age_days
+        lmp_date = input_date - timedelta(days=ga_days_total)
+        
+        # Calculate conception date (LMP + ~2 weeks)
+        cycle_adjustment = (cycle_length - 28) if cycle_length > 28 else 0
+        conception_date = lmp_date + timedelta(days=14 + cycle_adjustment)
+        
+        # Calculate due date (LMP + 40 weeks, adjusted for cycle length)
+        due_date = lmp_date + timedelta(days=280 + cycle_adjustment)
+    
+    # Calculate current gestational age
+    if lmp_date:
+        days_since_lmp = (today - lmp_date).days
+        current_ga_weeks = days_since_lmp // 7
+        current_ga_days = days_since_lmp % 7
+    else:
+        current_ga_weeks = None
+        current_ga_days = None
+    
+    # Format dates for output
+    format_date = lambda d: d.strftime('%Y-%m-%d') if d else None
+    
+    return {
+        "lmp_date": format_date(lmp_date),
+        "conception_date": format_date(conception_date),
+        "due_date": format_date(due_date),
+        "current_gestational_age": f"{current_ga_weeks}w{current_ga_days}d" if current_ga_weeks is not None else None,
+        "current_trimester": get_trimester(current_ga_weeks) if current_ga_weeks is not None else None,
+        "cycle_length_used": cycle_length,
+        "calculation_method": calculation_method
+    }
+
+def get_trimester(weeks):
+    """Helper function to determine trimester based on gestational age in weeks"""
+    if weeks < 13:
+        return "First trimester"
+    elif weeks < 27:
+        return "Second trimester"
+    else:
+        return "Third trimester"
+
+@mcp.tool()
+def revised_cardiac_risk_index(
+    high_risk_surgery: bool = False,
+    ischemic_heart_disease: bool = False,
+    congestive_heart_failure: bool = False,
+    cerebrovascular_disease: bool = False,
+    insulin_treatment: bool = False,
+    creatinine_over_2mg: bool = False
+) -> dict:
+    """
+    Revised Cardiac Risk Index for Pre-Operative Risk
+    Estimates risk of cardiac complications after noncardiac surgery.
+    
+    Parameters:
+    -----------
+    high_risk_surgery : bool
+        Intraperitoneal, intrathoracic, or suprainguinal vascular surgery
+    ischemic_heart_disease : bool
+        History of MI, positive exercise test, current chest pain considered due to myocardial 
+        ischemia, use of nitrate therapy, or ECG with pathological Q waves
+    congestive_heart_failure : bool
+        Pulmonary edema, bilateral rales, S3 gallop, paroxysmal nocturnal dyspnea, or 
+        CXR showing pulmonary vascular redistribution
+    cerebrovascular_disease : bool
+        Prior transient ischemic attack (TIA) or stroke
+    insulin_treatment : bool
+        Pre-operative treatment with insulin
+    creatinine_over_2mg : bool
+        Pre-operative creatinine >2 mg/dL (176.8 µmol/L)
+    
+    Returns:
+    --------
+    dict
+        Dictionary containing RCRI score and risk interpretation
+        
+    References:
+    -----------
+    Lee TH, et al. Circulation. 1999;100(10):1043-1049.
+    Canadian Cardiovascular Society (CCS) Guidelines, 2017.
+    European Society of Cardiology (ESC) Guidelines, 2022.
+    """
+    # Calculate RCRI score
+    score = 0
+    risk_factors = []
+    
+    if high_risk_surgery:
+        score += 1
+        risk_factors.append("High-risk surgery")
+    
+    if ischemic_heart_disease:
+        score += 1
+        risk_factors.append("History of ischemic heart disease")
+    
+    if congestive_heart_failure:
+        score += 1
+        risk_factors.append("History of congestive heart failure")
+    
+    if cerebrovascular_disease:
+        score += 1
+        risk_factors.append("History of cerebrovascular disease")
+    
+    if insulin_treatment:
+        score += 1
+        risk_factors.append("Pre-operative treatment with insulin")
+    
+    if creatinine_over_2mg:
+        score += 1
+        risk_factors.append("Pre-operative creatinine >2 mg/dL")
+    
+    # Determine risk percentage based on score
+    risk_percentages = {
+        0: 3.9,
+        1: 6.0,
+        2: 10.1,
+        3: 15.0,
+        4: 15.0,
+        5: 15.0,
+        6: 15.0
+    }
+    
+    risk_percent = risk_percentages.get(score, 15.0)
+    
+    # Determine risk category
+    if score == 0:
+        risk_category = "Low risk"
+    elif score == 1:
+        risk_category = "Intermediate risk"
+    elif score == 2:
+        risk_category = "Elevated risk"
+    else:  # score >= 3
+        risk_category = "High risk"
+    
+    # Return results
+    return {
+        "rcri_score": score,
+        "risk_factors": risk_factors,
+        "risk_percent": risk_percent,
+        "risk_category": risk_category,
+        "score_interpretation": f"RCRI Score: {score} - {risk_percent}% risk of major cardiac event"
+    }
+
+@mcp.tool()
+def child_pugh_score(
+    bilirubin: float,
+    albumin: float,
+    inr: float,
+    ascites: str,
+    encephalopathy_grade: int
+) -> int:
+    """
+    Calculates the Child-Pugh Score for cirrhosis mortality assessment.
+
+    Parameters:
+    -----------
+    bilirubin : float
+        Total bilirubin in mg/dL.
+    albumin : float
+        Albumin in g/dL.
+    inr : float
+        International Normalized Ratio (INR) for prothrombin time.
+    ascites : str
+        One of: "absent", "slight", "moderate".
+    encephalopathy_grade : int
+        Hepatic encephalopathy grade: 0 (none), 1-2 (mild), 3-4 (severe).
+
+    Returns:
+    --------
+    int
+        Total Child-Pugh score (5–15).
+    """
+    # Bilirubin points
+    bil_points = (
+        1 if bilirubin < 2 else
+        2 if 2 <= bilirubin <= 3 else
+        3
+    )
+
+    # Albumin points
+    alb_points = (
+        1 if albumin > 3.5 else
+        2 if 2.8 <= albumin <= 3.5 else
+        3
+    )
+
+    # INR points
+    inr_points = (
+        1 if inr < 1.7 else
+        2 if 1.7 <= inr <= 2.3 else
+        3
+    )
+
+    # Ascites points
+    ascites = ascites.lower()
+    ascites_points = {
+        "absent": 1,
+        "slight": 2,
+        "moderate": 3
+    }.get(ascites, 3)  # Default to 3 if unknown
+
+    # Encephalopathy points
+    if encephalopathy_grade == 0:
+        enceph_points = 1
+    elif 1 <= encephalopathy_grade <= 2:
+        enceph_points = 2
+    else:
+        enceph_points = 3
+
+    return bil_points + alb_points + inr_points + ascites_points + enceph_points
+
+@mcp.tool()
+def steroid_conversion(
+    from_steroid: str,
+    from_dose_mg: float,
+    to_steroid: str
+) -> float:
+    """
+    Converts corticosteroid dosages using standard equivalencies.
+
+    Parameters:
+    -----------
+    from_steroid : str
+        Name of the original steroid (e.g., 'prednisone', 'dexamethasone').
+    from_dose_mg : float
+        Dose of the original steroid in mg.
+    to_steroid : str
+        Name of the steroid to convert to.
+
+    Returns:
+    --------
+    float
+        Equivalent dose in mg of the target steroid.
+    """
+    # Equivalent dose per steroid (mg)
+    steroid_equivalents = {
+        "betamethasone": 0.75,
+        "cortisone": 25,
+        "dexamethasone": 0.75,
+        "hydrocortisone": 20,
+        "methylprednisolone": 4,
+        "prednisolone": 5,
+        "prednisone": 5,
+        "triamcinolone": 4
+    }
+
+    # Normalize names
+    from_steroid = from_steroid.lower()
+    to_steroid = to_steroid.lower()
+
+    # Ensure valid steroids
+    if from_steroid not in steroid_equivalents or to_steroid not in steroid_equivalents:
+        raise ValueError("Invalid steroid name provided.")
+
+    # Convert to hydrocortisone-equivalent dose first
+    hydrocortisone_equivalent = from_dose_mg * (steroid_equivalents["hydrocortisone"] / steroid_equivalents[from_steroid])
+
+    # Then convert to target steroid
+    converted_dose = hydrocortisone_equivalent * (steroid_equivalents[to_steroid] / steroid_equivalents["hydrocortisone"])
+    
+    return round(converted_dose, 2)
+
+@mcp.tool()
+def calculate_mme(
+    opioid: str,
+    dose_per_administration: float,
+    doses_per_day: int
+) -> float:
+    """
+    Calculates total daily Morphine Milligram Equivalents (MME).
+
+    Parameters:
+    -----------
+    opioid : str
+        Name of the opioid (e.g., 'oxycodone', 'fentanyl_patch').
+    dose_per_administration : float
+        Amount of opioid per dose (mg for most, mcg/hr for fentanyl patch).
+    doses_per_day : int
+        Number of times the dose is taken per day.
+
+    Returns:
+    --------
+    float
+        Total MME/day.
+    """
+    # MME conversion factors
+    mme_factors = {
+        "codeine": 0.15,
+        "fentanyl_buccal": 0.13,
+        "fentanyl_patch": 2.4,
+        "hydrocodone": 1.0,
+        "hydromorphone": 5.0,
+        "methadone": 4.7,  # Simplified; usually weight/dose dependent
+        "morphine": 1.0,
+        "oxycodone": 1.5,
+        "oxymorphone": 3.0,
+        "tapentadol": 0.4,
+        "tramadol": 0.2,
+        # "buprenorphine": 10.0  # Excluded from calculation per guidelines
+    }
+
+    # Normalize input
+    opioid_key = opioid.lower()
+
+    if opioid_key not in mme_factors:
+        raise ValueError("Unsupported or excluded opioid type.")
+
+    # MME/day = dose x frequency x conversion factor
+    mme_per_day = dose_per_administration * doses_per_day * mme_factors[opioid_key]
+    return round(mme_per_day, 2)
+
+@mcp.tool()
+def maintenance_fluids(weight_kg: float) -> float:
+    """
+    Calculates maintenance IV fluid rate (mL/hr) using the 4-2-1 Rule.
+
+    Parameters:
+    -----------
+    weight_kg : float
+        Patient's weight in kilograms.
+
+    Returns:
+    --------
+    float
+        Maintenance fluid rate in mL/hr.
+    """
+
+    if weight_kg <= 10:
+        rate = 4 * weight_kg
+    elif weight_kg <= 20:
+        rate = 40 + 2 * (weight_kg - 10)
+    else:
+        rate = 60 + 1 * (weight_kg - 20)
+
+    return round(rate, 2)
+
+@mcp.tool()
+def corrected_sodium(
+    measured_sodium: float,
+    serum_glucose: float
+) -> dict:
+    """
+    Calculates corrected sodium level in the setting of hyperglycemia
+    using Katz and Hillier correction formulas.
+
+    Parameters:
+    -----------
+    measured_sodium : float
+        Measured serum sodium in mEq/L.
+    serum_glucose : float
+        Serum glucose in mg/dL.
+
+    Returns:
+    --------
+    dict
+        Dictionary with corrected sodium values using Katz and Hillier formulas.
+    """
+    if serum_glucose < 100:
+        # No correction needed for glucose ≤ 100 mg/dL
+        return {
+            "katz": round(measured_sodium, 2),
+            "hillier": round(measured_sodium, 2)
+        }
+
+    # Apply corrections
+    katz_corrected = measured_sodium + 0.016 * (serum_glucose - 100)
+    hillier_corrected = measured_sodium + 0.024 * (serum_glucose - 100)
+
+    return {
+        "katz": round(katz_corrected, 2),
+        "hillier": round(hillier_corrected, 2)
+    }
+
+import math
+
+@mcp.tool()
+def meld_na(
+    creatinine: float,
+    bilirubin: float,
+    inr: float,
+    sodium: float,
+    dialysis_recent: bool = False
+) -> float:
+    """
+    Calculates MELD-Na score for liver transplant prioritization (OPTN/UNOS 2016).
+
+    Parameters:
+    -----------
+    creatinine : float
+        Serum creatinine in mg/dL.
+    bilirubin : float
+        Total bilirubin in mg/dL.
+    inr : float
+        INR (International Normalized Ratio).
+    sodium : float
+        Serum sodium in mEq/L.
+    dialysis_recent : bool
+        True if patient had ≥2 dialysis sessions or 24h CVVHD in the past 7 days.
+
+    Returns:
+    --------
+    float
+        MELD-Na score (max 40).
+    """
+    # Apply minimum values
+    cr = max(creatinine, 1.0)
+    bili = max(bilirubin, 1.0)
+    inr_val = max(inr, 1.0)
+
+    # Apply dialysis condition
+    if cr > 4.0 or dialysis_recent:
+        cr = 4.0
+
+    # Apply sodium caps
+    na = min(max(sodium, 125), 137)
+
+    # Initial MELD(i)
+    meld_i = 0.957 * math.log(cr) + 0.378 * math.log(bili) + 1.120 * math.log(inr_val) + 0.643
+    meld_i = round(meld_i, 1) * 10  # Rounded to 1 decimal, then multiplied by 10
+
+    # Apply Na adjustment if MELD(i) > 11
+    if meld_i > 11:
+        meld = meld_i + 1.32 * (137 - na) - (0.033 * meld_i * (137 - na))
+    else:
+        meld = meld_i
+
+    # Cap MELD at 40
+    return min(round(meld), 40)
+
+@mcp.tool()
+def framingham_risk_score(
+    age: int,
+    total_cholesterol: float,
+    hdl_cholesterol: float,
+    systolic_bp: float,
+    treated_for_bp: bool,
+    smoker: bool,
+    gender: str
+) -> float:
+    """
+    Calculates the Framingham Risk Score for 10-year risk of heart attack (CHD)
+    based on the Framingham Heart Study equation (men and women).
+
+    Parameters:
+    -----------
+    age : int
+        Age of the patient (30-79 years).
+    total_cholesterol : float
+        Total cholesterol in mg/dL.
+    hdl_cholesterol : float
+        HDL cholesterol in mg/dL.
+    systolic_bp : float
+        Systolic blood pressure in mmHg.
+    treated_for_bp : bool
+        Whether the patient is treated for high blood pressure (1 if yes, 0 if no).
+    smoker : bool
+        Whether the patient is a smoker (1 if yes, 0 if no).
+    gender : str
+        Gender of the patient ("male" or "female").
+
+    Returns:
+    --------
+    float
+        10-year risk of heart attack as a percentage.
+    """
+    
+    # Coefficients for men and women
+    coefficients = {
+        "male": {
+            "ln_age": 52.00961,
+            "ln_total_chol": 20.014077,
+            "ln_hdl_chol": -0.905964,
+            "ln_systolic_bp": 1.305784,
+            "treated_for_bp": 0.241549,
+            "smoker": 12.096316,
+            "ln_age_ln_total_chol": -4.605038,
+            "ln_age_smoker": -2.84367,
+            "ln_age_ln_age": -2.93323,
+            "intercept": -172.300168
+        },
+        "female": {
+            "ln_age": 31.764001,
+            "ln_total_chol": 22.465206,
+            "ln_hdl_chol": -1.187731,
+            "ln_systolic_bp": 2.552905,
+            "treated_for_bp": 0.420251,
+            "smoker": 13.07543,
+            "ln_age_ln_total_chol": -5.060998,
+            "ln_age_smoker": -2.996945,
+            "intercept": -146.5933061
+        }
+    }
+    
+    # Validate gender input
+    if gender.lower() not in coefficients:
+        raise ValueError("Invalid gender. Please enter 'male' or 'female'.")
+    
+    # Select appropriate coefficients based on gender
+    coeff = coefficients[gender.lower()]
+    
+    # Transform variables using logarithms
+    ln_age = math.log(age)
+    ln_total_chol = math.log(total_cholesterol)
+    ln_hdl_chol = math.log(hdl_cholesterol)
+    ln_systolic_bp = math.log(systolic_bp)
+    
+    # Adjust for smoking and age >70 (men) or >78 (women)
+    if age > 70 and gender == "male":
+        ln_age_smoker = math.log(70) * smoker
+    elif age > 78 and gender == "female":
+        ln_age_smoker = math.log(78) * smoker
+    else:
+        ln_age_smoker = ln_age * smoker
+
+    # Compute the linear predictor (L)
+    L = (coeff["ln_age"] * ln_age +
+         coeff["ln_total_chol"] * ln_total_chol +
+         coeff["ln_hdl_chol"] * ln_hdl_chol +
+         coeff["ln_systolic_bp"] * ln_systolic_bp +
+         coeff["treated_for_bp"] * treated_for_bp +
+         coeff["smoker"] * smoker +
+         coeff["ln_age_ln_total_chol"] * ln_age * ln_total_chol +
+         coeff["ln_age_smoker"] * ln_age_smoker +
+         coeff["ln_age_ln_age"] * ln_age ** 2 +
+         coeff["intercept"])
+
+    # Calculate probability of a heart attack using the equation
+    if gender == "male":
+        P = 1 - 0.9402 * math.exp(L)
+    else:
+        P = 1 - 0.98767 * math.exp(L)
+
+    # Return the risk as a percentage
+    risk_percentage = P * 100
+    return round(risk_percentage, 2)
+
+@mcp.tool()
+def homa_ir(fasting_insulin: float, fasting_glucose: float) -> float:
+    """
+    Calculates the HOMA-IR score for insulin resistance.
+
+    Formula:
+    Score = (Fasting insulin (uIU/mL) * Fasting glucose (mg/dL)) / 405
+
+    Parameters:
+    -----------
+    fasting_insulin : float
+        Fasting insulin level in micro-units per milliliter (uIU/mL).
+    fasting_glucose : float
+        Fasting glucose level in milligrams per deciliter (mg/dL).
+
+    Returns:
+    --------
+    float
+        HOMA-IR score.
+    """
+    if fasting_insulin <= 0 or fasting_glucose <= 0:
+        raise ValueError("Fasting insulin and fasting glucose must be greater than 0.")
+    
+    score = (fasting_insulin * fasting_glucose) / 405
+    return round(score, 2)
+
 
 def main():
     mcp.run()
