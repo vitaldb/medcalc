@@ -1,0 +1,2 @@
+For testing purpose, use the following script. Models can be changed to sonnet, etc. Type can be changed to zero_shot and one_shot_cot
+python -m MedCalcBench.evaluation.run --use OpenAI/gpt-3.5-turbo-mcp-true-gpt-4.1 --type direct_answer
