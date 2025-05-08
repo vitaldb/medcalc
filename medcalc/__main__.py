@@ -44,6 +44,32 @@ BP_COEFFICIENTS = {
     }
 }
 
+
+@mcp.tool()
+def egfr_epi(scr: float, age: int, male: bool) -> float:
+    """
+    Estimated Glomerular Filtration Rate (eGFR) using the EPI formula (version 2021)
+    Reference: N Engl J Med. 2021 Nov 4;385(19):1737-1749
+    
+    Parameters:
+    -----------
+    scr : float
+        serum creatinine level in mg/dL
+    age : int
+        Age in years
+    male : bool
+        true if Male
+    
+    Returns:
+    --------
+    float
+        Estimated GFR in mL/min/1.73m^2
+    """
+    # 성별에 따른 κ와 α 값 설정
+    k = 0.9 if male else 0.7
+    a = -0.302 if male else -0.241
+    return 142 * (0.9938 ** age) * (min(scr / k, 1) ** a) * (max(scr / k, 1) ** -1.2) * (1 if male else 1.012)
+
 @mcp.tool()
 def egfr_epi_cr_cys(scr: float, scys: float, age: int, male: bool) -> dict:
     """
@@ -113,31 +139,6 @@ def egfr_epi_cr_cys(scr: float, scys: float, age: int, male: bool) -> dict:
             "sex_factor": sex_factor
         }
     }
-
-@mcp.tool()
-def egfr_epi(scr: float, age: int, male: bool) -> float:
-    """
-    Estimated Glomerular Filtration Rate (eGFR) using the EPI formula (version 2021)
-    Reference: N Engl J Med. 2021 Nov 4;385(19):1737-1749
-    
-    Parameters:
-    -----------
-    scr : float
-        serum creatinine level in mg/dL
-    age : int
-        Age in years
-    male : bool
-        true if Male
-    
-    Returns:
-    --------
-    float
-        Estimated GFR in mL/min/1.73m^2
-    """
-    # 성별에 따른 κ와 α 값 설정
-    k = 0.9 if male else 0.7
-    a = -0.302 if male else -0.241
-    return 142 * (0.9938 ** age) * (min(scr / k, 1) ** a) * (max(scr / k, 1) ** -1.2) * (1 if male else 1.012)
 
 @mcp.tool()
 def bp_children(years: int, months: int, height: int, sex: str, systolic: int, diastolic: int) -> dict:
@@ -1018,7 +1019,7 @@ def crcl_cockcroft_gault(age: int, weight: float, height: float, scr: float, sex
         weight_used = "Actual (Underweight BMI)"
         range_weight = weight
     elif bmi < 25:  # Normal weight
-        calc_weight = ibw  # Use ideal body weight for calculation
+        calc_weight = min(ibw,weight)  # Use minimum of actual weiideal body weight for calculation
         weight_used = "IBW (Normal BMI)"
         range_weight = weight  # Use actual body weight for range
     else:  # Overweight/obese
@@ -1688,6 +1689,8 @@ def wells_pe_criteria(
         "two_tier_model": two_tier_risk,
         "score_interpretation": f"Score: {points}, {three_tier_risk} (three-tier), {two_tier_risk} (two-tier)"
     }
+
+
 
 @mcp.tool()
 def ibw_abw_calculator(weight_kg: float, height_inches: float, male: bool) -> dict:
