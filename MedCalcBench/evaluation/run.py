@@ -11,6 +11,8 @@ import math
 import numpy as np
 import ast
 from MedCalcBench.evaluation.table_stats import compute_overall_accuracy
+import gc
+import torch
 
 
 def zero_shot(note, question):
@@ -162,10 +164,10 @@ if __name__ == "__main__":
     if not os.path.exists("outputs"):
         os.makedirs("outputs")
 
-    if not os.path.exists(os.path.join("outputs", output_path)):
+    if not os.path.exists(f"./MedCalcBench/evaluation/outputs/{output_path}"):
         existing = None
     else:
-        existing = pd.read_json(os.path.join("outputs", output_path), lines=True)
+        existing = pd.read_json(os.path.join("./MedCalcBench/evaluation/outputs", output_path), lines=True)
         existing["Calculator ID"] = existing["Calculator ID"].astype(str)
         existing["Note ID"] = existing["Note ID"].astype(str)
 
@@ -179,10 +181,16 @@ if __name__ == "__main__":
     with open("./MedCalcBench/evaluation/one_shot_finalized_explanation.json", "r") as file:
         one_shot_json = json.load(file)
 
-    df = pd.read_csv("./MedCalcBench/dataset/test_data_short.csv")
+    df = pd.read_csv("./MedCalcBench/dataset/test_data_4_30.csv")
+    df = df.sample(n=100, random_state=0).reset_index(drop=True)
+    df["Row Number"] = range(1, len(df) + 1)
 
     for index in tqdm.tqdm(range(len(df))):
-
+        if index % 10 == 0:  # Every 10 samples
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
         row = df.iloc[index]
 
         patient_note = row["Patient Note"]
