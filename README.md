@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/vitaldb-medcalc-badge.png)](https://mseep.ai/app/vitaldb-medcalc)
+
 # MedCalc MCP Server
 
 This package provides a set of medical calculation tools exposed as an MCP (Model Context Protocol) server.
