@@ -4370,6 +4370,1116 @@ def padua_vte_prediction_score(
         return {'error': str(e)}
 
 
+@mcp.tool()
+def ventilator_tidal_volume(height_cm: float, male: bool) -> dict:
+    """
+    Low Tidal Volume Ventilation Calculator based on Ideal Body Weight (IBW).
+    Calculates IBW from height using the Devine formula, then provides
+    tidal volume range for lung-protective ventilation (6-8 mL/kg IBW).
+
+    Parameters:
+    -----------
+    height_cm : float
+        Patient height in centimeters
+    male : bool
+        True if patient is male, False if female
+
+    Returns:
+    --------
+    dict
+        ibw_kg: Ideal body weight in kg
+        tv_6: Tidal volume at 6 mL/kg IBW (mL)
+        tv_8: Tidal volume at 8 mL/kg IBW (mL)
+
+    References:
+    -----------
+    ARDSNet. N Engl J Med. 2000;342(18):1301-1308.
+    Devine BJ. Gentamicin therapy. Drug Intell Clin Pharm. 1974;8:650-655.
+    """
+    try:
+        height_inches = height_cm / 2.54
+        if male:
+            ibw = 50 + 0.91 * (height_cm - 152.4)
+        else:
+            ibw = 45.5 + 0.91 * (height_cm - 152.4)
+
+        if ibw <= 0:
+            return {'error': 'Height too low to calculate IBW'}
+
+        tv_6 = round(ibw * 6, 1)
+        tv_8 = round(ibw * 8, 1)
+
+        return {
+            'ibw_kg': round(ibw, 1),
+            'tv_6_mL': tv_6,
+            'tv_8_mL': tv_8,
+            'recommendation': f'Tidal volume range: {tv_6:.0f} - {tv_8:.0f} mL (6-8 mL/kg IBW)'
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def wells_dvt_criteria(
+    active_cancer: bool = False,
+    bedridden_or_major_surgery: bool = False,
+    calf_swelling_gt_3cm: bool = False,
+    collateral_superficial_veins: bool = False,
+    entire_leg_swollen: bool = False,
+    localized_tenderness: bool = False,
+    pitting_edema: bool = False,
+    paralysis_paresis_immobilization: bool = False,
+    previously_documented_dvt: bool = False,
+    alternative_diagnosis_likely: bool = False
+) -> dict:
+    """
+    Wells' Criteria for Deep Vein Thrombosis (DVT).
+    Estimates probability of DVT based on clinical criteria.
+
+    Parameters:
+    -----------
+    active_cancer : bool
+        Active cancer (treatment/palliation within 6 months)
+    bedridden_or_major_surgery : bool
+        Bedridden >3 days or major surgery within 12 weeks
+    calf_swelling_gt_3cm : bool
+        Calf swelling >3 cm compared to other leg
+    collateral_superficial_veins : bool
+        Collateral (non-varicose) superficial veins present
+    entire_leg_swollen : bool
+        Entire leg swollen
+    localized_tenderness : bool
+        Localized tenderness along deep venous system
+    pitting_edema : bool
+        Pitting edema confined to symptomatic leg
+    paralysis_paresis_immobilization : bool
+        Paralysis, paresis, or recent plaster immobilization
+    previously_documented_dvt : bool
+        Previously documented DVT
+    alternative_diagnosis_likely : bool
+        Alternative diagnosis at least as likely as DVT
+
+    Returns:
+    --------
+    dict
+        score, risk_level, prevalence
+    """
+    try:
+        score = 0
+        if active_cancer: score += 1
+        if bedridden_or_major_surgery: score += 1
+        if calf_swelling_gt_3cm: score += 1
+        if collateral_superficial_veins: score += 1
+        if entire_leg_swollen: score += 1
+        if localized_tenderness: score += 1
+        if pitting_edema: score += 1
+        if paralysis_paresis_immobilization: score += 1
+        if previously_documented_dvt: score += 1
+        if alternative_diagnosis_likely: score -= 2
+
+        if score <= 0:
+            risk = "Low"
+            prevalence = "~5%"
+        elif score <= 2:
+            risk = "Moderate"
+            prevalence = "~17%"
+        else:
+            risk = "High"
+            prevalence = "17-53%"
+
+        return {'score': score, 'risk_level': risk, 'prevalence': prevalence}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def pecarn_pediatric_head_injury(
+    age_years: int,
+    gcs: int = 15,
+    altered_mental_status: bool = False,
+    palpable_skull_fracture: bool = False,
+    basilar_skull_fracture_signs: bool = False,
+    scalp_hematoma_occipital_parietal_temporal: bool = False,
+    loc_ge_5_seconds: bool = False,
+    not_acting_normally: bool = False,
+    history_of_loc: bool = False,
+    history_of_vomiting: bool = False,
+    severe_headache: bool = False,
+    severe_mechanism: bool = False
+) -> dict:
+    """
+    PECARN Pediatric Head Injury/Trauma Algorithm.
+    Identifies children at very low risk of clinically-important traumatic brain injuries (ciTBI).
+
+    Parameters:
+    -----------
+    age_years : int
+        Patient age in years
+    gcs : int
+        Glasgow Coma Scale score (default 15)
+    altered_mental_status : bool
+        Altered mental status (agitation, somnolence, repetitive questioning, slow response)
+    palpable_skull_fracture : bool
+        Palpable skull fracture (age <2 only)
+    basilar_skull_fracture_signs : bool
+        Signs of basilar skull fracture (age >=2 only)
+    scalp_hematoma_occipital_parietal_temporal : bool
+        Occipital, parietal, or temporal scalp hematoma (age <2 only)
+    loc_ge_5_seconds : bool
+        Loss of consciousness >= 5 seconds (age <2 only)
+    not_acting_normally : bool
+        Not acting normally per parent (age <2 only)
+    history_of_loc : bool
+        History of loss of consciousness (age >=2 only)
+    history_of_vomiting : bool
+        History of vomiting (age >=2 only)
+    severe_headache : bool
+        Severe headache (age >=2 only)
+    severe_mechanism : bool
+        Severe mechanism of injury
+
+    Returns:
+    --------
+    dict
+        risk_category, ct_recommendation, citbi_risk
+    """
+    try:
+        if age_years < 2:
+            if gcs <= 14 or palpable_skull_fracture or altered_mental_status:
+                return {
+                    'risk_category': 'High',
+                    'ct_recommendation': 'CT recommended',
+                    'ciTBI_risk': '~4.4%'
+                }
+            elif (scalp_hematoma_occipital_parietal_temporal or loc_ge_5_seconds or
+                  not_acting_normally or severe_mechanism):
+                return {
+                    'risk_category': 'Intermediate',
+                    'ct_recommendation': 'Observation vs CT (based on clinical factors, worsening, age <3 months, physician experience)',
+                    'ciTBI_risk': '~0.9%'
+                }
+            else:
+                return {
+                    'risk_category': 'Low',
+                    'ct_recommendation': 'CT not recommended',
+                    'ciTBI_risk': '<0.02%'
+                }
+        else:
+            if gcs <= 14 or basilar_skull_fracture_signs or altered_mental_status:
+                return {
+                    'risk_category': 'High',
+                    'ct_recommendation': 'CT recommended',
+                    'ciTBI_risk': '~4.3%'
+                }
+            elif (history_of_loc or history_of_vomiting or severe_headache or severe_mechanism):
+                return {
+                    'risk_category': 'Intermediate',
+                    'ct_recommendation': 'Observation vs CT (based on clinical factors, worsening, physician experience)',
+                    'ciTBI_risk': '~0.9%'
+                }
+            else:
+                return {
+                    'risk_category': 'Low',
+                    'ct_recommendation': 'CT not recommended',
+                    'ciTBI_risk': '<0.05%'
+                }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def news2_score(
+    respiratory_rate: int,
+    spo2: int,
+    supplemental_o2: bool,
+    temperature: float,
+    systolic_bp: int,
+    heart_rate: int,
+    consciousness: str = "alert",
+    spo2_scale2: bool = False
+) -> dict:
+    """
+    National Early Warning Score 2 (NEWS2).
+    Detects clinical deterioration in acutely ill patients.
+
+    Parameters:
+    -----------
+    respiratory_rate : int
+        Respiratory rate (breaths/min)
+    spo2 : int
+        Oxygen saturation (%)
+    supplemental_o2 : bool
+        Whether patient is on supplemental oxygen
+    temperature : float
+        Temperature in Celsius
+    systolic_bp : int
+        Systolic blood pressure (mmHg)
+    heart_rate : int
+        Heart rate (bpm)
+    consciousness : str
+        One of: "alert", "confusion", "voice", "pain", "unresponsive"
+    spo2_scale2 : bool
+        Use SpO2 Scale 2 for confirmed hypercapnic respiratory failure (e.g. COPD)
+
+    Returns:
+    --------
+    dict
+        total_score, subscores, clinical_response, any_extreme (single param >=3)
+    """
+    try:
+        scores = {}
+
+        # Respiratory rate
+        if respiratory_rate <= 8: scores['respiratory_rate'] = 3
+        elif respiratory_rate <= 11: scores['respiratory_rate'] = 1
+        elif respiratory_rate <= 20: scores['respiratory_rate'] = 0
+        elif respiratory_rate <= 24: scores['respiratory_rate'] = 2
+        else: scores['respiratory_rate'] = 3
+
+        # SpO2
+        if spo2_scale2:
+            if spo2 <= 83: scores['spo2'] = 3
+            elif spo2 <= 85: scores['spo2'] = 2
+            elif spo2 <= 87: scores['spo2'] = 1
+            elif spo2 <= 92:
+                scores['spo2'] = 0
+            elif spo2 >= 93 and not supplemental_o2:
+                scores['spo2'] = 0
+            elif spo2 <= 94 and supplemental_o2: scores['spo2'] = 2
+            elif spo2 <= 96 and supplemental_o2: scores['spo2'] = 2
+            else: scores['spo2'] = 3  # >=97 on O2
+        else:
+            if spo2 <= 91: scores['spo2'] = 3
+            elif spo2 <= 93: scores['spo2'] = 2
+            elif spo2 <= 95: scores['spo2'] = 1
+            else: scores['spo2'] = 0
+
+        # Supplemental oxygen
+        scores['supplemental_o2'] = 2 if supplemental_o2 else 0
+
+        # Temperature
+        if temperature <= 35.0: scores['temperature'] = 3
+        elif temperature <= 36.0: scores['temperature'] = 1
+        elif temperature <= 38.0: scores['temperature'] = 0
+        elif temperature <= 39.0: scores['temperature'] = 1
+        else: scores['temperature'] = 2
+
+        # Systolic BP
+        if systolic_bp <= 90: scores['systolic_bp'] = 3
+        elif systolic_bp <= 100: scores['systolic_bp'] = 2
+        elif systolic_bp <= 110: scores['systolic_bp'] = 1
+        elif systolic_bp <= 219: scores['systolic_bp'] = 0
+        else: scores['systolic_bp'] = 3
+
+        # Heart rate
+        if heart_rate <= 40: scores['heart_rate'] = 3
+        elif heart_rate <= 50: scores['heart_rate'] = 1
+        elif heart_rate <= 90: scores['heart_rate'] = 0
+        elif heart_rate <= 110: scores['heart_rate'] = 1
+        elif heart_rate <= 130: scores['heart_rate'] = 2
+        else: scores['heart_rate'] = 3
+
+        # Consciousness
+        consciousness = consciousness.lower()
+        if consciousness == "alert":
+            scores['consciousness'] = 0
+        else:
+            scores['consciousness'] = 3
+
+        total = sum(scores.values())
+        any_extreme = any(v >= 3 for v in scores.values())
+
+        if total >= 7:
+            response = "High - Emergency response, critical care team"
+        elif total >= 5:
+            response = "Medium - Urgent response, clinician review within 30 min"
+        elif any_extreme:
+            response = "Low-Medium - Urgent review (single parameter score >= 3)"
+        elif total >= 1:
+            response = "Low - Assess by competent registered nurse"
+        else:
+            response = "Routine monitoring"
+
+        return {
+            'total_score': total,
+            'subscores': scores,
+            'clinical_response': response,
+            'any_extreme': any_extreme
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def grace_acs_score(
+    age: int,
+    heart_rate: int,
+    systolic_bp: int,
+    creatinine: float,
+    killip_class: int = 1,
+    cardiac_arrest: bool = False,
+    st_deviation: bool = False,
+    elevated_cardiac_enzymes: bool = False
+) -> dict:
+    """
+    GRACE ACS Risk and Mortality Calculator.
+    Estimates in-hospital mortality in acute coronary syndrome patients.
+
+    Parameters:
+    -----------
+    age : int
+        Patient age in years
+    heart_rate : int
+        Heart rate (bpm)
+    systolic_bp : int
+        Systolic blood pressure (mmHg)
+    creatinine : float
+        Serum creatinine (mg/dL)
+    killip_class : int
+        Killip class (1-4): 1=No CHF, 2=Rales/JVD, 3=Pulmonary edema, 4=Cardiogenic shock
+    cardiac_arrest : bool
+        Cardiac arrest at admission
+    st_deviation : bool
+        ST-segment deviation on ECG
+    elevated_cardiac_enzymes : bool
+        Elevated/abnormal cardiac enzymes
+
+    Returns:
+    --------
+    dict
+        score, risk_level, in_hospital_mortality
+    """
+    try:
+        score = 0
+
+        # Age
+        if age < 30: score += 0
+        elif age < 40: score += 8
+        elif age < 50: score += 25
+        elif age < 60: score += 41
+        elif age < 70: score += 58
+        elif age < 80: score += 75
+        elif age < 90: score += 91
+        else: score += 100
+
+        # Heart rate
+        if heart_rate < 50: score += 0
+        elif heart_rate < 70: score += 3
+        elif heart_rate < 90: score += 9
+        elif heart_rate < 110: score += 15
+        elif heart_rate < 150: score += 24
+        elif heart_rate < 200: score += 38
+        else: score += 46
+
+        # Systolic BP (inverse)
+        if systolic_bp < 80: score += 58
+        elif systolic_bp < 100: score += 53
+        elif systolic_bp < 120: score += 43
+        elif systolic_bp < 140: score += 34
+        elif systolic_bp < 160: score += 24
+        elif systolic_bp < 200: score += 10
+        else: score += 0
+
+        # Creatinine
+        if creatinine < 0.4: score += 1
+        elif creatinine < 0.8: score += 4
+        elif creatinine < 1.2: score += 7
+        elif creatinine < 1.6: score += 10
+        elif creatinine < 2.0: score += 13
+        elif creatinine < 4.0: score += 21
+        else: score += 28
+
+        # Killip class
+        killip_points = {1: 0, 2: 20, 3: 39, 4: 59}
+        score += killip_points.get(killip_class, 0)
+
+        # Binary variables
+        if cardiac_arrest: score += 39
+        if st_deviation: score += 28
+        if elevated_cardiac_enzymes: score += 14
+
+        if score <= 108:
+            risk = "Low"
+            mortality = "<1%"
+        elif score <= 140:
+            risk = "Intermediate"
+            mortality = "1-3%"
+        else:
+            risk = "High"
+            mortality = ">3%"
+
+        return {'score': score, 'risk_level': risk, 'in_hospital_mortality': mortality}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def ascvd_10yr_risk(
+    age: int,
+    male: bool,
+    african_american: bool,
+    total_cholesterol: float,
+    hdl_c: float,
+    systolic_bp: int,
+    bp_treated: bool,
+    diabetes: bool,
+    current_smoker: bool
+) -> dict:
+    """
+    ASCVD 2013 Pooled Cohort Equations (AHA/ACC).
+    Estimates 10-year risk of atherosclerotic cardiovascular disease.
+    Applicable for ages 40-79.
+
+    Parameters:
+    -----------
+    age : int
+        Patient age (40-79)
+    male : bool
+        True if male
+    african_american : bool
+        True if African American, False if White/other
+    total_cholesterol : float
+        Total cholesterol (mg/dL)
+    hdl_c : float
+        HDL cholesterol (mg/dL)
+    systolic_bp : int
+        Systolic blood pressure (mmHg)
+    bp_treated : bool
+        Currently on blood pressure treatment
+    diabetes : bool
+        Has diabetes
+    current_smoker : bool
+        Current smoker
+
+    Returns:
+    --------
+    dict
+        risk_percent, risk_category
+    """
+    try:
+        ln_age = math.log(age)
+        ln_tc = math.log(total_cholesterol)
+        ln_hdl = math.log(hdl_c)
+        ln_sbp = math.log(systolic_bp)
+        smoker = 1 if current_smoker else 0
+        dm = 1 if diabetes else 0
+
+        if male and not african_american:
+            # White men
+            individual_sum = (
+                12.344 * ln_age +
+                11.853 * ln_tc +
+                -2.664 * ln_age * ln_tc +
+                -7.990 * ln_hdl +
+                1.769 * ln_age * ln_hdl +
+                (1.797 if bp_treated else 1.764) * ln_sbp +
+                7.837 * smoker +
+                -1.795 * ln_age * smoker +
+                0.658 * dm
+            )
+            mean_coeff = 61.1816
+            s0 = 0.91436
+        elif male and african_american:
+            # AA men
+            individual_sum = (
+                2.469 * ln_age +
+                0.302 * ln_tc +
+                -0.307 * ln_hdl +
+                (1.916 if bp_treated else 1.809) * ln_sbp +
+                0.549 * smoker +
+                0.645 * dm
+            )
+            mean_coeff = 19.5425
+            s0 = 0.89536
+        elif not male and not african_american:
+            # White women
+            individual_sum = (
+                -29.799 * ln_age +
+                4.884 * ln_age ** 2 +
+                13.540 * ln_tc +
+                -3.114 * ln_age * ln_tc +
+                -13.578 * ln_hdl +
+                3.149 * ln_age * ln_hdl +
+                (2.019 if bp_treated else 1.957) * ln_sbp +
+                7.574 * smoker +
+                -1.665 * ln_age * smoker +
+                0.661 * dm
+            )
+            mean_coeff = -29.1817
+            s0 = 0.96652
+        else:
+            # AA women
+            individual_sum = (
+                17.1141 * ln_age +
+                0.9396 * ln_tc +
+                -18.9196 * ln_hdl +
+                4.4748 * ln_age * ln_hdl +
+                (29.2907 + -6.4321 * ln_age if bp_treated else 27.8197 + -6.0873 * ln_age) * ln_sbp +
+                0.6908 * smoker +
+                0.8738 * dm
+            )
+            mean_coeff = 86.6081
+            s0 = 0.95334
+
+        risk = 1 - s0 ** math.exp(individual_sum - mean_coeff)
+        risk_pct = round(risk * 100, 1)
+
+        if risk_pct < 5:
+            category = "Low"
+        elif risk_pct < 7.5:
+            category = "Borderline"
+        elif risk_pct < 20:
+            category = "Intermediate"
+        else:
+            category = "High"
+
+        return {'risk_percent': risk_pct, 'risk_category': category}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def apache2_score(
+    temperature: float,
+    map_mmhg: float,
+    heart_rate: int,
+    respiratory_rate: int,
+    fio2: float,
+    pao2: float = 0,
+    aa_gradient_val: float = 0,
+    arterial_ph: float = 7.4,
+    sodium: float = 140,
+    potassium: float = 4.0,
+    creatinine: float = 1.0,
+    acute_renal_failure: bool = False,
+    hematocrit: float = 40,
+    wbc: float = 10,
+    gcs: int = 15,
+    age: int = 50,
+    chronic_health: str = "none"
+) -> dict:
+    """
+    APACHE II Score for ICU mortality prediction.
+
+    Parameters:
+    -----------
+    temperature : float
+        Rectal temperature (Celsius)
+    map_mmhg : float
+        Mean arterial pressure (mmHg)
+    heart_rate : int
+        Heart rate (bpm)
+    respiratory_rate : int
+        Respiratory rate (breaths/min)
+    fio2 : float
+        Fraction of inspired oxygen (0.21-1.0)
+    pao2 : float
+        PaO2 in mmHg (used if FiO2 <0.5)
+    aa_gradient_val : float
+        A-a gradient in mmHg (used if FiO2 >=0.5)
+    arterial_ph : float
+        Arterial pH
+    sodium : float
+        Serum sodium (mEq/L)
+    potassium : float
+        Serum potassium (mEq/L)
+    creatinine : float
+        Serum creatinine (mg/dL)
+    acute_renal_failure : bool
+        Acute renal failure (doubles creatinine points)
+    hematocrit : float
+        Hematocrit (%)
+    wbc : float
+        White blood cell count (x10^3/uL)
+    gcs : int
+        Glasgow Coma Scale (3-15)
+    age : int
+        Age in years
+    chronic_health : str
+        "none", "elective_postop", or "emergency_or_nonop"
+
+    Returns:
+    --------
+    dict
+        total_score, physiology_score, age_points, chronic_points
+    """
+    try:
+        physiology = 0
+
+        # Temperature
+        t = temperature
+        if t >= 41: physiology += 4
+        elif t >= 39: physiology += 3
+        elif t >= 38.5: physiology += 1
+        elif t >= 36: physiology += 0
+        elif t >= 34: physiology += 1
+        elif t >= 32: physiology += 2
+        elif t >= 30: physiology += 3
+        else: physiology += 4
+
+        # MAP
+        m = map_mmhg
+        if m >= 160: physiology += 4
+        elif m >= 130: physiology += 3
+        elif m >= 110: physiology += 2
+        elif m >= 70: physiology += 0
+        elif m >= 50: physiology += 2
+        else: physiology += 4
+
+        # Heart rate
+        hr = heart_rate
+        if hr >= 180: physiology += 4
+        elif hr >= 140: physiology += 3
+        elif hr >= 110: physiology += 2
+        elif hr >= 70: physiology += 0
+        elif hr >= 55: physiology += 2
+        elif hr >= 40: physiology += 3
+        else: physiology += 4
+
+        # Respiratory rate
+        rr = respiratory_rate
+        if rr >= 50: physiology += 4
+        elif rr >= 35: physiology += 3
+        elif rr >= 25: physiology += 1
+        elif rr >= 12: physiology += 0
+        elif rr >= 10: physiology += 1
+        elif rr >= 6: physiology += 2
+        else: physiology += 4
+
+        # Oxygenation
+        if fio2 >= 0.5:
+            aa = aa_gradient_val
+            if aa >= 500: physiology += 4
+            elif aa >= 350: physiology += 3
+            elif aa >= 200: physiology += 2
+            else: physiology += 0
+        else:
+            po2 = pao2
+            if po2 > 70: physiology += 0
+            elif po2 >= 61: physiology += 1
+            elif po2 >= 55: physiology += 3
+            else: physiology += 4
+
+        # Arterial pH
+        ph = arterial_ph
+        if ph >= 7.70: physiology += 4
+        elif ph >= 7.60: physiology += 3
+        elif ph >= 7.50: physiology += 1
+        elif ph >= 7.33: physiology += 0
+        elif ph >= 7.25: physiology += 2
+        elif ph >= 7.15: physiology += 3
+        else: physiology += 4
+
+        # Sodium
+        na = sodium
+        if na >= 180: physiology += 4
+        elif na >= 160: physiology += 3
+        elif na >= 155: physiology += 2
+        elif na >= 150: physiology += 1
+        elif na >= 130: physiology += 0
+        elif na >= 120: physiology += 2
+        elif na >= 111: physiology += 3
+        else: physiology += 4
+
+        # Potassium
+        k = potassium
+        if k >= 7.0: physiology += 4
+        elif k >= 6.0: physiology += 3
+        elif k >= 5.5: physiology += 1
+        elif k >= 3.5: physiology += 0
+        elif k >= 3.0: physiology += 1
+        elif k >= 2.5: physiology += 2
+        else: physiology += 4
+
+        # Creatinine
+        cr = creatinine
+        cr_mult = 2 if acute_renal_failure else 1
+        if cr >= 3.5: physiology += 4 * cr_mult
+        elif cr >= 2.0: physiology += 3 * cr_mult
+        elif cr >= 1.5: physiology += 2 * cr_mult
+        elif cr >= 0.6: physiology += 0
+        else: physiology += 2 * cr_mult
+
+        # Hematocrit
+        hct = hematocrit
+        if hct >= 60: physiology += 4
+        elif hct >= 50: physiology += 2
+        elif hct >= 46: physiology += 1
+        elif hct >= 30: physiology += 0
+        elif hct >= 20: physiology += 2
+        else: physiology += 4
+
+        # WBC
+        w = wbc
+        if w >= 40: physiology += 4
+        elif w >= 20: physiology += 2
+        elif w >= 15: physiology += 1
+        elif w >= 3: physiology += 0
+        elif w >= 1: physiology += 2
+        else: physiology += 4
+
+        # GCS
+        physiology += 15 - gcs
+
+        # Age points
+        if age <= 44: age_pts = 0
+        elif age <= 54: age_pts = 2
+        elif age <= 64: age_pts = 3
+        elif age <= 74: age_pts = 5
+        else: age_pts = 6
+
+        # Chronic health
+        if chronic_health == "emergency_or_nonop":
+            chronic_pts = 5
+        elif chronic_health == "elective_postop":
+            chronic_pts = 2
+        else:
+            chronic_pts = 0
+
+        total = physiology + age_pts + chronic_pts
+
+        return {
+            'total_score': total,
+            'physiology_score': physiology,
+            'age_points': age_pts,
+            'chronic_health_points': chronic_pts
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def timi_stemi(
+    age: int,
+    dm_htn_angina: bool = False,
+    systolic_bp_lt_100: bool = False,
+    heart_rate_gt_100: bool = False,
+    killip_2_to_4: bool = False,
+    weight_lt_67kg: bool = False,
+    anterior_ste_or_lbbb: bool = False,
+    time_to_treatment_gt_4hr: bool = False
+) -> dict:
+    """
+    TIMI Risk Score for STEMI.
+    Estimates 30-day mortality in ST-elevation MI patients.
+
+    Parameters:
+    -----------
+    age : int
+        Patient age in years
+    dm_htn_angina : bool
+        Diabetes, hypertension, or angina
+    systolic_bp_lt_100 : bool
+        Systolic BP <100 mmHg
+    heart_rate_gt_100 : bool
+        Heart rate >100 bpm
+    killip_2_to_4 : bool
+        Killip class II-IV
+    weight_lt_67kg : bool
+        Weight <67 kg
+    anterior_ste_or_lbbb : bool
+        Anterior ST elevation or LBBB
+    time_to_treatment_gt_4hr : bool
+        Time to treatment >4 hours
+
+    Returns:
+    --------
+    dict
+        score, estimated_mortality
+    """
+    try:
+        score = 0
+        if age >= 75: score += 3
+        elif age >= 65: score += 2
+        if dm_htn_angina: score += 1
+        if systolic_bp_lt_100: score += 3
+        if heart_rate_gt_100: score += 2
+        if killip_2_to_4: score += 2
+        if weight_lt_67kg: score += 1
+        if anterior_ste_or_lbbb: score += 1
+        if time_to_treatment_gt_4hr: score += 1
+
+        mortality_map = {
+            0: "0.8%", 1: "1.6%", 2: "2.2%", 3: "4.4%", 4: "7.3%",
+            5: "12.4%", 6: "16.1%", 7: "23.4%", 8: "26.8%"
+        }
+        mortality = mortality_map.get(score, "35.9%")
+
+        return {'score': score, 'estimated_30day_mortality': mortality}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def timi_nstemi(
+    age_ge_65: bool = False,
+    ge_3_cad_risk_factors: bool = False,
+    known_cad: bool = False,
+    asa_use_past_7days: bool = False,
+    severe_angina: bool = False,
+    st_deviation: bool = False,
+    positive_cardiac_marker: bool = False
+) -> dict:
+    """
+    TIMI Risk Score for UA/NSTEMI.
+    Estimates 14-day risk of death, MI, or urgent revascularization.
+
+    Parameters:
+    -----------
+    age_ge_65 : bool
+        Age >= 65
+    ge_3_cad_risk_factors : bool
+        >= 3 CAD risk factors (HTN, hyperlipidemia, DM, family hx, current smoker)
+    known_cad : bool
+        Known CAD (stenosis >= 50%)
+    asa_use_past_7days : bool
+        ASA use in past 7 days
+    severe_angina : bool
+        Severe angina (>= 2 episodes in 24 hrs)
+    st_deviation : bool
+        ST deviation >= 0.5mm on ECG
+    positive_cardiac_marker : bool
+        Positive cardiac marker (troponin/CK-MB)
+
+    Returns:
+    --------
+    dict
+        score, estimated_14day_event_rate
+    """
+    try:
+        score = sum([
+            age_ge_65, ge_3_cad_risk_factors, known_cad,
+            asa_use_past_7days, severe_angina, st_deviation,
+            positive_cardiac_marker
+        ])
+
+        if score <= 1: event_rate = "4.7%"
+        elif score == 2: event_rate = "8.3%"
+        elif score == 3: event_rate = "13.2%"
+        elif score == 4: event_rate = "19.9%"
+        elif score == 5: event_rate = "26.2%"
+        else: event_rate = "40.9%"
+
+        return {'score': score, 'estimated_14day_event_rate': event_rate}
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def anion_gap_delta_delta(sodium: float, chloride: float, bicarbonate: float) -> dict:
+    """
+    Anion Gap with Delta-Delta Ratio calculation.
+    Evaluates mixed acid-base disorders.
+
+    Parameters:
+    -----------
+    sodium : float
+        Serum sodium (mEq/L)
+    chloride : float
+        Serum chloride (mEq/L)
+    bicarbonate : float
+        Serum bicarbonate / HCO3 (mEq/L)
+
+    Returns:
+    --------
+    dict
+        anion_gap, delta_ag, delta_hco3, delta_ratio, interpretation
+    """
+    try:
+        ag = sodium - (chloride + bicarbonate)
+        delta_ag = ag - 12
+        delta_hco3 = 24 - bicarbonate
+
+        if delta_hco3 == 0:
+            return {
+                'anion_gap': round(ag, 1),
+                'delta_ag': round(delta_ag, 1),
+                'delta_hco3': 0,
+                'delta_ratio': None,
+                'interpretation': 'HCO3 is normal (24), delta-delta ratio not applicable'
+            }
+
+        delta_ratio = delta_ag / delta_hco3
+
+        if delta_ratio < 0.4:
+            interp = "Hyperchloremic non-anion gap metabolic acidosis (NAGMA)"
+        elif delta_ratio < 0.8:
+            interp = "Combined high AG + non-AG metabolic acidosis"
+        elif delta_ratio <= 2.0:
+            interp = "Pure high anion gap metabolic acidosis"
+        else:
+            interp = "High AG metabolic acidosis + pre-existing metabolic alkalosis"
+
+        return {
+            'anion_gap': round(ag, 1),
+            'delta_ag': round(delta_ag, 1),
+            'delta_hco3': round(delta_hco3, 1),
+            'delta_ratio': round(delta_ratio, 2),
+            'interpretation': interp
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def aa_gradient(paco2: float, pao2: float, age: int, fio2: float = 0.21, patm: float = 760) -> dict:
+    """
+    Alveolar-Arterial (A-a) Gradient calculator.
+    Evaluates oxygenation efficiency.
+
+    Parameters:
+    -----------
+    paco2 : float
+        Arterial CO2 (mmHg, from ABG)
+    pao2 : float
+        Arterial O2 (mmHg, from ABG)
+    age : int
+        Patient age in years
+    fio2 : float
+        Fraction of inspired oxygen (default 0.21 = room air)
+    patm : float
+        Atmospheric pressure in mmHg (default 760 = sea level)
+
+    Returns:
+    --------
+    dict
+        pao2_alveolar, aa_gradient, expected_gradient, interpretation
+    """
+    try:
+        pao2_alveolar = fio2 * (patm - 47) - (paco2 / 0.8)
+        gradient = pao2_alveolar - pao2
+        expected = (age / 4) + 4
+
+        if gradient <= expected:
+            interp = "Normal A-a gradient for age. If hypoxemic, consider hypoventilation or low FiO2."
+        else:
+            interp = "Elevated A-a gradient. Consider V/Q mismatch, shunt, or diffusion impairment."
+
+        return {
+            'pao2_alveolar': round(pao2_alveolar, 1),
+            'aa_gradient': round(gradient, 1),
+            'expected_gradient': round(expected, 1),
+            'interpretation': interp
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def winters_formula(bicarbonate: float, measured_paco2: float = None) -> dict:
+    """
+    Winter's Formula for expected respiratory compensation in metabolic acidosis.
+
+    Parameters:
+    -----------
+    bicarbonate : float
+        Measured serum bicarbonate / HCO3 (mEq/L)
+    measured_paco2 : float, optional
+        Measured PaCO2 (mmHg). If provided, interprets compensation adequacy.
+
+    Returns:
+    --------
+    dict
+        expected_paco2_low, expected_paco2_high, interpretation
+    """
+    try:
+        expected = 1.5 * bicarbonate + 8
+        low = expected - 2
+        high = expected + 2
+
+        result = {
+            'expected_paco2_low': round(low, 1),
+            'expected_paco2_high': round(high, 1),
+            'expected_paco2_mid': round(expected, 1)
+        }
+
+        if measured_paco2 is not None:
+            if measured_paco2 < low:
+                result['interpretation'] = "Concurrent respiratory alkalosis (overcompensation)"
+            elif measured_paco2 > high:
+                result['interpretation'] = "Concurrent respiratory acidosis (inadequate compensation)"
+            else:
+                result['interpretation'] = "Appropriate respiratory compensation"
+
+        return result
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@mcp.tool()
+def infusion_rate(weight_kg: float, dose: float, dose_unit: str, concentration: float, conc_unit: str) -> dict:
+    """
+    Universal IV drug infusion rate calculator.
+    Calculates mL/h from weight, dose, dose unit, and drug concentration.
+
+    Parameters:
+    -----------
+    weight_kg : float
+        Patient body weight in kilograms
+    dose : float
+        Drug dose value (e.g. 0.01, 5, 100)
+    dose_unit : str
+        One of: "mcg/kg/min", "mcg/kg/hr", "mg/kg/min", "mg/kg/hr",
+                "mcg/min", "mg/min", "mcg/hr", "mg/hr",
+                "mg/kg" (bolus), "mcg/kg" (bolus)
+    concentration : float
+        Drug concentration value
+    conc_unit : str
+        One of: "mcg/mL", "mg/mL"
+
+    Returns:
+    --------
+    dict
+        ml_per_hr: infusion rate in mL/h (for continuous infusions)
+        ml_bolus: bolus volume in mL (for bolus doses)
+        dose_description: human-readable dose description
+    """
+    try:
+        # Normalize concentration to mcg/mL
+        if conc_unit == "mg/mL":
+            conc_mcg_per_ml = concentration * 1000
+        elif conc_unit == "mcg/mL":
+            conc_mcg_per_ml = concentration
+        else:
+            return {'error': f'Unknown concentration unit: {conc_unit}'}
+
+        ml_per_hr = None
+        ml_bolus = None
+
+        if dose_unit == "mcg/kg/min":
+            ml_per_hr = (dose * weight_kg * 60) / conc_mcg_per_ml
+        elif dose_unit == "mcg/kg/hr":
+            ml_per_hr = (dose * weight_kg) / conc_mcg_per_ml
+        elif dose_unit == "mg/kg/min":
+            ml_per_hr = (dose * 1000 * weight_kg * 60) / conc_mcg_per_ml
+        elif dose_unit == "mg/kg/hr":
+            ml_per_hr = (dose * 1000 * weight_kg) / conc_mcg_per_ml
+        elif dose_unit == "mcg/min":
+            ml_per_hr = (dose * 60) / conc_mcg_per_ml
+        elif dose_unit == "mg/min":
+            ml_per_hr = (dose * 1000 * 60) / conc_mcg_per_ml
+        elif dose_unit == "mcg/hr":
+            ml_per_hr = dose / conc_mcg_per_ml
+        elif dose_unit == "mg/hr":
+            ml_per_hr = (dose * 1000) / conc_mcg_per_ml
+        elif dose_unit == "mg/kg":
+            ml_bolus = (dose * weight_kg * 1000) / conc_mcg_per_ml
+        elif dose_unit == "mcg/kg":
+            ml_bolus = (dose * weight_kg) / conc_mcg_per_ml
+        else:
+            return {'error': f'Unknown dose unit: {dose_unit}'}
+
+        result = {
+            'dose_description': f'{dose} {dose_unit} for {weight_kg} kg patient at {concentration} {conc_unit}'
+        }
+        if ml_per_hr is not None:
+            result['ml_per_hr'] = round(ml_per_hr, 2)
+        if ml_bolus is not None:
+            result['ml_bolus'] = round(ml_bolus, 2)
+        return result
+    except Exception as e:
+        return {'error': str(e)}
+
 
 def shutdown_server():
     """Function to shutdown the server after a delay"""
