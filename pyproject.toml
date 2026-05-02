@@ -12,7 +12,7 @@ authors = [
 dependencies = ["scipy","mcp"]
 
 [project.scripts]
-medcalc = "medcalc.__main__:main"
+medcalc = "medcalc.calculator:main"
 
 [tool.setuptools]
 packages = ["medcalc"]
